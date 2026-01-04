@@ -21,14 +21,14 @@
     <main class="flex-1 p-8">
       <h1 class="text-2xl font-bold mb-8">プロジェクト一覧</h1>
       <div id="projects-list" class="space-y-4 mb-8"></div>
-      <button onclick="createProject()" class="bg-blue-500 text-white px-6 py-3 rounded hover:bg-blue-600">
+      <button id="create-btn" class="bg-blue-500 text-white px-6 py-3 rounded hover:bg-blue-600">
         新規プロジェクトを作成
       </button>
     </main>
   </div>
 
   <script>
-    const API_URL = 'https://gb.production-null.work/api';
+    const API_URL = '/api';
 
     async function loadProjects() {
       try {
@@ -54,9 +54,8 @@
               <div class="bg-gray-50 p-3 rounded text-xs font-mono mb-2 max-w-md">
                 &lt;script src="https://www.example.com/tag/${project._id.slice(0, 4)}/***js" charset="utf-8"&gt;&lt;/script&gt;
               </div>
-              <button onclick="copyCode('${project._id}')" 
-                class="w-full bg-blue-500 text-white px-4 py-2 rounded text-sm hover:bg-blue-600">
-                <span id="copy-${project._id}">📋 コピーする</span>
+              <button data-project-id="${project._id}" class="copy-btn w-full bg-blue-500 text-white px-4 py-2 rounded text-sm hover:bg-blue-600">
+                <span>📋 コピーする</span>
               </button>
             </div>
           </div>
@@ -64,6 +63,18 @@
       } catch (err) {
         console.error('Failed to load projects:', err);
       }
+    }
+
+    function copyCode(projectId) {
+      const code = `<script src="https://www.example.com/tag/${projectId}/tracker.js" charset="utf-8"></script>`;
+      navigator.clipboard.writeText(code);
+      
+      const btn = event.target.closest('.copy-btn');
+      const span = btn.querySelector('span');
+      span.textContent = '✓ コピーしました';
+      setTimeout(() => {
+        span.textContent = '📋 コピーする';
+      }, 2000);
     }
 
     async function createProject() {
@@ -83,16 +94,16 @@
       }
     }
 
-    function copyCode(projectId) {
-      const code = `<script src="https://www.example.com/tag/${projectId}/tracker.js" charset="utf-8"></script>`;
-      navigator.clipboard.writeText(code);
-      
-      const btn = document.getElementById(`copy-${projectId}`);
-      btn.textContent = '✓ コピーしました';
-      setTimeout(() => {
-        btn.textContent = '📋 コピーする';
-      }, 2000);
-    }
+    // イベントリスナーを設定
+    document.getElementById('create-btn').addEventListener('click', createProject);
+    
+    // delegationでコピーボタンのイベントを処理
+    document.getElementById('projects-list').addEventListener('click', (e) => {
+      const btn = e.target.closest('.copy-btn');
+      if (btn) {
+        copyCode(btn.dataset.projectId);
+      }
+    });
 
     loadProjects();
   </script>
