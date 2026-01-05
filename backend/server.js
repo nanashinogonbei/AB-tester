@@ -14,9 +14,15 @@ const projectSchema = new mongoose.Schema({ name: String, url: String });
 const Project = mongoose.model('Project', projectSchema);
 
 const logSchema = new mongoose.Schema({
-		userId: String, url: String, event: String, device: String,
-		browser: String, os: String, language: String,
-		timestamp: { type: Date, default: Date.now }
+	userId: String,
+	url: String,
+	event: String,
+	device: String,
+	browser: String,
+	os: String,
+	language: String,
+	timestamp: { type: Date, default: Date.now },
+	exitTimestamp: Date  // 追加
 });
 const Log = mongoose.model('Log', logSchema);
 
@@ -110,19 +116,36 @@ app.get('/api/analytics/:projectId/event-count', async (req, res) => {
 app.post('/track', async (req, res) => {
 	console.log('--- New Request ---');
 	console.log('Body:', req.body);
-	console.log('Headers:', req.headers['content-type']);
 	try {
 		const agent = useragent.parse(req.headers['user-agent']);
+		
+		// デバイス分類の詳細化
+		let deviceType = 'other';
+		const deviceFamily = agent.device.family;
+		
+		if (deviceFamily === 'Other' || deviceFamily === 'Desktop') {
+			deviceType = 'PC';
+		} else if (deviceFamily.includes('iPad') || deviceFamily.includes('Tablet')) {
+			deviceType = 'Tablet';
+		} else if (deviceFamily.includes('iPhone') || deviceFamily.includes('Android') || 
+		           deviceFamily.includes('Mobile')) {
+			deviceType = 'SP';
+		}
+		
 		const log = new Log({
-			...req.body,
-			device: agent.device.family === 'Other' ? 'PC' : agent.device.family,
+			userId: req.body.userId,
+			url: req.body.url,
+			event: req.body.event,
+			device: deviceType,
 			browser: agent.family,
 			os: agent.os.family,
 			language: req.headers['accept-language']?.split(',')[0].split('-')[0] || 'unknown',
-			timestamp: new Date()
+			timestamp: new Date(),
+			exitTimestamp: req.body.exitTimestamp ? new Date(req.body.exitTimestamp) : null
 		});
+		
 		await log.save();
-		console.log('Track saved:', { userId: req.body.userId, event: req.body.event, url: req.body.url });
+		console.log('Track saved:', { userId: req.body.userId, event: req.body.event });
 		res.json({ status: 'ok' });
 	} catch (err) {
 		console.error('Track error:', err);
