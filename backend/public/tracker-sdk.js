@@ -1,4 +1,18 @@
 (function () {
+	// URLパラメーターをチェック
+	const urlParams = new URLSearchParams(window.location.search);
+	const isVoidMode = urlParams.get('gh_void') === '0';
+	
+	// gh_void=0が設定されている場合はトラッキングを無効化
+	if (isVoidMode) {
+		console.log('[Tracker] Tracking disabled: gh_void=0 detected');
+		// ダミー関数を設定（エラーを防ぐため）
+		window.trackerEvent = function() {
+			console.log('[Tracker] Event ignored (void mode)');
+		};
+		return; // ここで処理を終了
+	}
+
 	const currentScript = document.currentScript || document.querySelector('script[src*="tracker-sdk.js"]');
 	const scriptUrl = currentScript ? currentScript.src : '';
 	const SERVER_URL = scriptUrl ? new URL(scriptUrl).origin : window.location.origin;
@@ -7,7 +21,7 @@
 	let isFirstVisit = false;
 	
 	if (!userId) {
-		userId = 'user_' + Math.random().toString(36).substr(2, 9);
+		userId = 'user_' + Math.random().toString(36).substring(2, 11);
 		localStorage.setItem('tracker_user_id', userId);
 		isFirstVisit = true;
 	}
