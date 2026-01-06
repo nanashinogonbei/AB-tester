@@ -46,13 +46,14 @@
 							<div class="flex gap-4">
 								<a href="analytics.html?id=${project._id}" class="text-blue-500 text-sm hover:underline">ABテスト</a>
 								<a href="analytics.html?id=${project._id}" class="text-blue-500 text-sm hover:underline">アクセス解析</a>
+								<a href="#" data-project-id="${project._id}" class="delete-link text-red-500 text-sm hover:underline">削除</a>
 							</div>
 						</div>
 
 						<div class="flex-shrink-0">
 							<div class="text-sm font-medium mb-2">SDK</div>
 								<div class="bg-gray-50 p-3 rounded text-xs font-mono mb-2 max-w-md">
-									&lt;script src="${window.location.origin}/tag/${project._id}/tracker.js" charset="utf-8"&gt;&lt;/script&gt;
+									&lt;script src="${window.location.origin}/tracker.js" charset="utf-8"&gt;&lt;/script&gt;
 								</div>
 							<button data-project-id="${project._id}" class="copy-btn w-full bg-blue-500 text-white px-4 py-2 rounded text-sm hover:bg-blue-600">
 								<span>📋 コピーする</span>
@@ -68,7 +69,7 @@
 		// copyCode関数を修正
 		function copyCode(projectId, buttonElement) {
 			const serverUrl = window.location.origin; // 現在のサーバーURLを取得
-			const code = `<script src="${serverUrl}/tag/${projectId}/tracker.js" charset="utf-8"><\/script>`;
+			const code = `<script src="${serverUrl}/tracker.js" charset="utf-8"><\/script>`;
 			navigator.clipboard.writeText(code);
 			
 			const span = buttonElement.querySelector('span');
@@ -76,6 +77,28 @@
 			setTimeout(() => {
 				span.textContent = '📋 コピーする';
 			}, 2000);
+		}
+
+		async function deleteProject(projectId) {
+			if (!confirm('このプロジェクトを削除してもよろしいですか？\n関連するすべてのトラッキングデータも削除されます。')) {
+				return;
+			}
+
+			try {
+				const res = await fetch(`${API_URL}/projects/${projectId}`, {
+					method: 'DELETE'
+				});
+				
+				if (res.ok) {
+					alert('プロジェクトを削除しました');
+					loadProjects();
+				} else {
+					alert('削除に失敗しました');
+				}
+			} catch (err) {
+				console.error('Failed to delete project:', err);
+				alert('削除に失敗しました');
+			}
 		}
 
 		async function createProject() {
@@ -98,11 +121,19 @@
 		// イベントリスナーを設定
 		document.getElementById('create-btn').addEventListener('click', createProject);
 		
-		// delegationでコピーボタンのイベントを処理
+		// delegationでコピーボタンと削除リンクのイベントを処理
 		document.getElementById('projects-list').addEventListener('click', (e) => {
-			const btn = e.target.closest('.copy-btn');
-			if (btn) {
-				copyCode(btn.dataset.projectId, btn);
+			const copyBtn = e.target.closest('.copy-btn');
+			if (copyBtn) {
+				copyCode(copyBtn.dataset.projectId, copyBtn);
+				return;
+			}
+
+			const deleteLink = e.target.closest('.delete-link');
+			if (deleteLink) {
+				e.preventDefault();
+				deleteProject(deleteLink.dataset.projectId);
+				return;
 			}
 		});
 
