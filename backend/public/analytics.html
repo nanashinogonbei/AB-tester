@@ -334,13 +334,22 @@
       document.getElementById(`event-count-${rowId}`).textContent = data.count;
     }
 
+    // 日本時間の日付文字列を取得する関数
+    function getJSTDateString(date) {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    }
+
     function initDates() {
-      const end = new Date();
-      const start = new Date();
-      start.setDate(start.getDate() - 30);
+      // 日本時間で日付を取得
+      const now = new Date();
+      const jstNow = new Date(now.getTime() + (9 * 60 * 60 * 1000)); // UTC+9
+      const jstStart = new Date(jstNow.getTime() - (30 * 24 * 60 * 60 * 1000)); // 30日前
       
-      document.getElementById('start-date').value = start.toISOString().split('T')[0];
-      document.getElementById('end-date').value = end.toISOString().split('T')[0];
+      document.getElementById('start-date').value = getJSTDateString(jstStart);
+      document.getElementById('end-date').value = getJSTDateString(jstNow);
     }
 
     initDates();
