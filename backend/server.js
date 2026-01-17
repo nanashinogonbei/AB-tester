@@ -5,6 +5,7 @@ const useragent = require('useragent');
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
+const cron = require('node-cron');
 
 const app = express();
 
@@ -44,6 +45,17 @@ logSchema.index({ projectId: 1, event: 1 });
 
 const Log = mongoose.model('Log', logSchema);
 
+// サジェスト用のスキーマを追加
+const suggestionSchema = new mongoose.Schema({
+	devices: [String],
+	browsers: [String],
+	oss: [String],
+	languages: [String],
+	updatedAt: { type: Date, default: Date.now }
+});
+
+const Suggestion = mongoose.model('Suggestion', suggestionSchema);
+
 // 日本時間（UTC+9）に変換する関数
 function toJST(date) {
 	const utcDate = new Date(date);
@@ -73,6 +85,95 @@ async function findProjectByUrl(url) {
 	}
 	return null;
 }
+
+// サジェストデータを更新する関数
+async function updateSuggestions() {
+	try {
+		console.log('[Suggestion Update] Starting at', new Date().toISOString());
+		
+		const uniqueValues = await Log.aggregate([
+			{
+				$group: {
+					_id: null,
+					devices: { $addToSet: '$device' },
+					browsers: { $addToSet: '$browser' },
+					oss: { $addToSet: '$os' },
+					languages: { $addToSet: '$language' }
+				}
+			}
+		]);
+
+		if (uniqueValues.length === 0) {
+			console.log('[Suggestion Update] No data found');
+			return;
+		}
+
+		const data = uniqueValues[0];
+		
+		// null/undefined/空文字を除外してソート
+		const cleanAndSort = (arr) => {
+			return arr
+				.filter(v => v && v.trim() !== '')
+				.sort((a, b) => a.localeCompare(b));
+		};
+
+		const suggestionData = {
+			devices: cleanAndSort(data.devices),
+			browsers: cleanAndSort(data.browsers),
+			oss: cleanAndSort(data.oss),
+			languages: cleanAndSort(data.languages),
+			updatedAt: new Date()
+		};
+
+		// upsert: データがなければ作成、あれば更新
+		await Suggestion.findOneAndUpdate(
+			{},
+			suggestionData,
+			{ upsert: true, new: true }
+		);
+
+		console.log('[Suggestion Update] Completed', {
+			devices: suggestionData.devices.length,
+			browsers: suggestionData.browsers.length,
+			oss: suggestionData.oss.length,
+			languages: suggestionData.languages.length
+		});
+	} catch (err) {
+		console.error('[Suggestion Update] Error:', err);
+	}
+}
+
+// 12時間ごとにサジェストデータを更新（毎日0時と12時に実行）
+cron.schedule('0 0,12 * * *', () => {
+	console.log('[Cron] Triggering suggestion update');
+	updateSuggestions();
+});
+
+// サーバー起動時に初回更新を実行
+updateSuggestions();
+
+// サジェストデータ取得API
+app.get('/api/suggestions', async (req, res) => {
+	try {
+		let suggestion = await Suggestion.findOne();
+		
+		if (!suggestion) {
+			// データがない場合は空の配列を返す
+			suggestion = {
+				devices: [],
+				browsers: [],
+				oss: [],
+				languages: [],
+				updatedAt: new Date()
+			};
+		}
+		
+		res.json(suggestion);
+	} catch (err) {
+		console.error('Suggestions error:', err);
+		res.status(500).json({ error: err.message });
+	}
+});
 
 app.get('/api/projects', async (req, res) => {
 	const projects = await Project.find();
@@ -139,7 +240,7 @@ app.get('/api/analytics/:projectId', async (req, res) => {
 		if (os) query.os = { $in: os.split(',') };
 		if (language) query.language = { $in: language.split(',') };
 
-		const [stats, pages, filters] = await Promise.all([
+		const [stats, pages, events] = await Promise.all([
 			Log.aggregate([
 				{ $match: query },
 				{ 
@@ -161,29 +262,19 @@ app.get('/api/analytics/:projectId', async (req, res) => {
 				{ $match: { projectId: project._id } },
 				{ $group: { 
 					_id: null,
-					browsers: { $addToSet: "$browser" },
-					devices: { $addToSet: "$device" },
-					oss: { $addToSet: "$os" },
-					languages: { $addToSet: "$language" },
 					events: { $addToSet: "$event" }
 				}}
 			])
 		]);
 
 		const result = stats[0] || { pv: 0, fv: 0, uu: [] };
-		const f = filters[0] || { browsers: [], devices: [], oss: [], languages: [], events: [] };
+		const e = events[0] || { events: [] };
 
 		res.json({
 			pageViews: result.pv + result.fv,
 			uniqueUsers: result.uu ? result.uu.length : 0,
 			popularPages: pages.map(p => ({ url: p._id, count: p.count })),
-			availableEvents: f.events.filter(e => e !== 'page_view' && e !== 'first_view' && e !== 'page_leave'),
-			filters: {
-				browsers: f.browsers.filter(Boolean),
-				devices: f.devices.filter(Boolean),
-				oss: f.oss.filter(Boolean),
-				languages: f.languages.filter(Boolean)
-			}
+			availableEvents: e.events.filter(ev => ev !== 'page_view' && ev !== 'first_view' && ev !== 'page_leave')
 		});
 	} catch (err) {
 		console.error('Analytics error:', err);

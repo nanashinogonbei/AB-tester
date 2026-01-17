@@ -22,15 +22,18 @@
     .section-title { font-size: 14px; font-weight: 500; margin-bottom: 8px; }
     .date-range { display: flex; align-items: center; gap: 16px; }
     .date-range input { padding: 8px 16px; border: 1px solid #d1d5db; border-radius: 4px; }
-    .filters { display: flex; gap: 12px; margin-top: 12px; }
+    .filters { display: flex; gap: 12px; margin-top: 12px; flex-wrap: wrap; }
     .filter { position: relative; }
     .filter-btn { padding: 8px 24px; border: 1px solid #d1d5db; border-radius: 9999px; background: white; cursor: pointer; font-size: 14px; }
     .filter-btn.active { background: #22c55e; color: white; border-color: #22c55e; }
-    .filter-dropdown { display: none; position: absolute; top: 100%; left: 0; margin-top: 8px; background: white; border: 1px solid #d1d5db; border-radius: 8px; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); padding: 16px; min-width: 200px; z-index: 10; }
+    .filter-dropdown { display: none; position: absolute; top: 100%; left: 0; margin-top: 8px; background: white; border: 1px solid #d1d5db; border-radius: 8px; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); padding: 16px; min-width: 240px; z-index: 10; max-height: 400px; overflow-y: auto; }
     .filter-dropdown.show { display: block; }
+    .filter-search { width: 100%; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 4px; margin-bottom: 12px; font-size: 14px; }
+    .filter-search:focus { outline: none; border-color: #3b82f6; }
     .filter-option { display: flex; align-items: center; gap: 8px; padding: 8px 0; cursor: pointer; }
     .filter-option:hover { background: #f9fafb; }
     .filter-option input { cursor: pointer; }
+    .filter-option.hidden { display: none; }
     .filter-close { width: 100%; margin-top: 8px; padding: 8px 16px; background: #e5e7eb; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; }
     .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; margin-bottom: 32px; }
     .stat-card { background: #f3f4f6; border-radius: 8px; padding: 24px; }
@@ -112,6 +115,7 @@
     
     let project = null;
     let analyticsData = null;
+    let suggestionData = null;
     let selectedFilters = { device: [], browser: [], os: [], language: [] };
     let eventRows = [];
 
@@ -122,6 +126,11 @@
       
       document.getElementById('project-name').textContent = project.name;
       document.getElementById('project-url').textContent = project.url;
+    }
+
+    async function loadSuggestions() {
+      const res = await fetch(`${API_URL}/suggestions`);
+      suggestionData = await res.json();
     }
 
     async function loadAnalytics(keepDropdownOpen = false) {
@@ -158,11 +167,10 @@
     }
     
     function updateFilterButtons() {
-      // ボタンの表示だけを更新（ドロップダウンは再描画しない）
       document.querySelectorAll('.filter').forEach(filterDiv => {
         const btn = filterDiv.querySelector('.filter-btn');
         const dropdown = filterDiv.querySelector('.filter-dropdown');
-        const key = dropdown.id.replace('filter-', '');
+        const key = dropdown.dataset.filterKey;
         const hasSelected = selectedFilters[key].length > 0;
         
         btn.className = 'filter-btn' + (hasSelected ? ' active' : '');
@@ -177,16 +185,16 @@
       // 既存のドロップダウンの表示状態を保存
       const openDropdowns = [];
       document.querySelectorAll('.filter-dropdown.show').forEach(dd => {
-        openDropdowns.push(dd.id.replace('filter-', ''));
+        openDropdowns.push(dd.dataset.filterKey);
       });
       
       filtersContainer.innerHTML = '';
       
       [
-        { label: 'デバイス', key: 'device', options: analyticsData.filters.devices },
-        { label: 'ブラウザ', key: 'browser', options: analyticsData.filters.browsers },
-        { label: 'OS', key: 'os', options: analyticsData.filters.oss },
-        { label: '言語', key: 'language', options: analyticsData.filters.languages }
+        { label: 'デバイス', key: 'device', options: suggestionData.devices },
+        { label: 'ブラウザ', key: 'browser', options: suggestionData.browsers },
+        { label: 'OS', key: 'os', options: suggestionData.oss },
+        { label: '言語', key: 'language', options: suggestionData.languages }
       ].forEach(filter => {
         const filterDiv = document.createElement('div');
         filterDiv.className = 'filter';
@@ -200,16 +208,26 @@
         
         const dropdown = document.createElement('div');
         dropdown.className = 'filter-dropdown';
-        dropdown.id = `filter-${filter.key}`;
+        dropdown.dataset.filterKey = filter.key;
         
         // 以前開いていた場合は再度開く
         if (openDropdowns.includes(filter.key)) {
           dropdown.classList.add('show');
         }
         
+        // 検索ボックスを追加
+        const searchInput = document.createElement('input');
+        searchInput.type = 'text';
+        searchInput.className = 'filter-search';
+        searchInput.placeholder = `${filter.label}を検索...`;
+        searchInput.onclick = (e) => e.stopPropagation();
+        searchInput.oninput = (e) => filterOptions(filter.key, e.target.value);
+        dropdown.appendChild(searchInput);
+        
         filter.options.forEach(opt => {
           const label = document.createElement('label');
           label.className = 'filter-option';
+          label.dataset.value = opt.toLowerCase();
           
           const checkbox = document.createElement('input');
           checkbox.type = 'checkbox';
@@ -241,13 +259,35 @@
       });
     }
 
+    function filterOptions(key, searchText) {
+      const dropdown = document.querySelector(`.filter-dropdown[data-filter-key="${key}"]`);
+      const options = dropdown.querySelectorAll('.filter-option');
+      const search = searchText.toLowerCase();
+      
+      options.forEach(option => {
+        const value = option.dataset.value;
+        if (value.includes(search)) {
+          option.classList.remove('hidden');
+        } else {
+          option.classList.add('hidden');
+        }
+      });
+    }
+
     function toggleFilter(key) {
-      const dropdown = document.getElementById(`filter-${key}`);
+      const dropdown = document.querySelector(`.filter-dropdown[data-filter-key="${key}"]`);
       dropdown.classList.toggle('show');
+      
+      // ドロップダウンを開いたときに検索ボックスをクリア
+      if (dropdown.classList.contains('show')) {
+        const searchInput = dropdown.querySelector('.filter-search');
+        searchInput.value = '';
+        filterOptions(key, '');
+      }
     }
 
     function closeFilter(key) {
-      document.getElementById(`filter-${key}`).classList.remove('show');
+      document.querySelector(`.filter-dropdown[data-filter-key="${key}"]`).classList.remove('show');
     }
 
     function updateFilter(key, value, checked) {
@@ -334,7 +374,6 @@
       document.getElementById(`event-count-${rowId}`).textContent = data.count;
     }
 
-    // 日本時間の日付文字列を取得する関数
     function getJSTDateString(date) {
       const year = date.getFullYear();
       const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -343,17 +382,22 @@
     }
 
     function initDates() {
-      // 日本時間で日付を取得
       const now = new Date();
-      const jstNow = new Date(now.getTime() + (9 * 60 * 60 * 1000)); // UTC+9
-      const jstStart = new Date(jstNow.getTime() - (30 * 24 * 60 * 60 * 1000)); // 30日前
+      const jstNow = new Date(now.getTime() + (9 * 60 * 60 * 1000));
+      const jstStart = new Date(jstNow.getTime() - (30 * 24 * 60 * 60 * 1000));
       
       document.getElementById('start-date').value = getJSTDateString(jstStart);
       document.getElementById('end-date').value = getJSTDateString(jstNow);
     }
 
-    initDates();
-    loadProject().then(loadAnalytics);
+    async function init() {
+      initDates();
+      await loadProject();
+      await loadSuggestions();
+      await loadAnalytics();
+    }
+
+    init();
 
     document.getElementById('start-date').addEventListener('change', loadAnalytics);
     document.getElementById('end-date').addEventListener('change', loadAnalytics);
