@@ -8,7 +8,7 @@
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f9fafb; }
     .container { display: flex; min-height: 100vh; }
-    .sidebar { width: 176px; background: white; border-right: 1px solid #e5e7eb; padding: 24px; }
+    .sidebar { width: 16rem; background: white; border-right: 1px solid #e5e7eb; padding: 24px; }
     .sidebar a { display: block; width: 100%; padding: 8px 16px; border: 1px solid #d1d5db; border-radius: 4px; text-align: center; text-decoration: none; color: #374151; font-size: 14px; margin-bottom: 8px; }
     .sidebar-item { padding: 8px 16px; font-size: 14px; color: #6b7280; }
     .main { flex: 1; padding: 32px; max-width: 1200px; }
@@ -37,18 +37,10 @@
     .condition-header.collapsed::after { transform: rotate(-90deg); }
     .condition-content { display: none; }
     .condition-content.show { display: block; }
-    .condition-row { display: flex; gap: 12px; margin-bottom: 12px; align-items: start; }
-    .condition-row input { flex: 1; position: relative; }
+    .condition-row { display: flex; gap: 12px; margin-bottom: 12px; align-items: center; }
+    .condition-row input { flex: 1; }
     .condition-row select { min-width: 180px; }
     .condition-row textarea { flex: 1; min-height: 100px; }
-    .suggest-input-wrapper { position: relative; flex: 1; }
-    .suggest-dropdown { display: none; position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #d1d5db; border-radius: 4px; max-height: 200px; overflow-y: auto; z-index: 100; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
-    .suggest-dropdown.show { display: block; }
-    .suggest-option { padding: 8px 12px; cursor: pointer; font-size: 14px; }
-    .suggest-option:hover { background: #f3f4f6; }
-    .suggest-option.active { background: #e0e7ff; }
-    .condition-footer { display: flex; justify-content: flex-end; margin-top: 12px; }
-    .btn-add-condition { background: #3b82f6; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-size: 14px; }
     .btn-add { background: #3b82f6; color: white; border: none; border-radius: 50%; width: 40px; height: 40px; font-size: 24px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
     .btn-remove { color: #ef4444; background: none; border: none; padding: 8px 16px; cursor: pointer; }
     .creative-section { background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 24px; margin-bottom: 24px; }
@@ -70,12 +62,20 @@
     .modal-footer { display: flex; justify-content: center; gap: 16px; margin-top: 24px; }
     .btn-modal-save { background: #3b82f6; color: white; border: none; padding: 12px 48px; border-radius: 4px; cursor: pointer; font-size: 16px; }
     .btn-modal-cancel { background: #e5e7eb; border: none; padding: 12px 48px; border-radius: 4px; cursor: pointer; font-size: 16px; }
+    
+    /* その他セクション用の新しいスタイル */
+    .other-condition-container { display: flex; gap: 24px; }
+    .other-condition-left { display: flex; gap: 12px; align-items: center; }
+    .other-condition-right { display: flex; gap: 12px; align-items: center; flex: 1; }
+    .other-condition-label { font-size: 14px; color: #374151; white-space: nowrap; }
+    .other-condition-number { width: 100px; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 14px; text-align: center; }
+    .other-condition-url { flex: 1; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 14px; color: #9ca3af; }
   </style>
 </head>
 <body>
   <div class="container">
     <aside class="sidebar">
-      <a href="#" onclick="goBack(); return false;">プロジェクト管理</a>
+      <div class="sidebar-item"><a href="./admin.html">プロジェクト管理</a></div>
       <div class="sidebar-item">アカウント管理</div>
     </aside>
 
@@ -125,47 +125,38 @@
         <div class="section-title">実行条件</div>
         
         <div class="condition-group">
-          <div class="condition-header collapsed" onclick="toggleCondition('device')">
+          <div class="condition-header" onclick="toggleCondition('device')">
             <span>デバイス</span>
           </div>
-          <div class="condition-content" id="condition-device">
-            <button class="btn-add" style="margin-top: 12px;" onclick="addConditionRow('device')">+</button>
-          </div>
+          <div class="condition-content show" id="condition-device"></div>
         </div>
 
         <div class="condition-group">
-          <div class="condition-header collapsed" onclick="toggleCondition('language')">
+          <div class="condition-header" onclick="toggleCondition('language')">
             <span>言語</span>
           </div>
-          <div class="condition-content" id="condition-language">
-            <button class="btn-add" style="margin-top: 12px;" onclick="addConditionRow('language')">+</button>
-          </div>
+          <div class="condition-content show" id="condition-language"></div>
         </div>
 
         <div class="condition-group">
-          <div class="condition-header collapsed" onclick="toggleCondition('os')">
+          <div class="condition-header" onclick="toggleCondition('os')">
             <span>OS</span>
           </div>
-          <div class="condition-content" id="condition-os">
-            <button class="btn-add" style="margin-top: 12px;" onclick="addConditionRow('os')">+</button>
-          </div>
-          
+          <div class="condition-content show" id="condition-os"></div>
         </div>
 
         <div class="condition-group">
-          <div class="condition-header collapsed" onclick="toggleCondition('browser')">
+          <div class="condition-header" onclick="toggleCondition('browser')">
             <span>ブラウザ</span>
           </div>
-          <div class="condition-content" id="condition-browser">
-            <button class="btn-add" style="margin-top: 12px;" onclick="addConditionRow('browser')">+</button>
-          </div>
+          <div class="condition-content show" id="condition-browser"></div>
         </div>
 
         <div class="condition-group">
-          <div class="condition-header collapsed" onclick="toggleCondition('other')">
+          <div class="condition-header" onclick="toggleCondition('other')">
             <span>その他</span>
           </div>
-          <div class="condition-content" id="condition-other"></div>
+          <div class="condition-content show" id="condition-other"></div>
         </div>
       </div>
 
@@ -181,7 +172,7 @@
       </div>
 
       <div style="display: flex; justify-content: center; gap: 16px; margin-top: 32px;">
-        <button class="btn-save" onclick="saveABTest()">新規クリエイティブを作成</button>
+        <button class="btn-save" onclick="saveABTest()">このテストを保存する</button>
       </div>
     </main>
   </div>
@@ -217,8 +208,6 @@
     let conditions = { device: [], language: [], os: [], browser: [], other: [] };
     let creatives = [];
     let currentCreativeIndex = -1;
-    let suggestionData = null;
-    let activeInputId = null;
 
     const conditionTypes = [
       { value: 'regex', label: '正規表現に一致' },
@@ -234,21 +223,8 @@
       { value: 'notOneOf', label: '次のいずれでもない' }
     ];
 
-    async function loadSuggestions() {
-      try {
-        const res = await fetch(`${API_URL}/suggestions`);
-        suggestionData = await res.json();
-      } catch (err) {
-        console.error('Failed to load suggestions:', err);
-        suggestionData = { devices: [], browsers: [], oss: [], languages: [] };
-      }
-    }
-
     async function loadABTest() {
-      await loadSuggestions();
-      
       if (!abtestId) {
-        // 新規作成モード
         document.getElementById('test-name').value = '';
         initializeConditions();
         addCreative();
@@ -314,12 +290,6 @@
             renderConditionRow(type, index);
           });
         }
-        
-        // 追加ボタンを追加
-        const footer = document.createElement('div');
-        footer.className = 'condition-footer';
-        footer.innerHTML = `<button class="btn-add-condition" onclick="addConditionRow('${type}')">追加</button>`;
-        container.appendChild(footer);
       });
     }
 
@@ -328,17 +298,23 @@
       const condition = conditions[type][index];
       
       const row = document.createElement('div');
-      row.className = 'condition-row';
-      
-      const inputId = `condition-input-${type}-${index}`;
-      const dropdownId = `suggest-dropdown-${type}-${index}`;
       
       if (type === 'other') {
+        row.className = 'other-condition-container';
         row.innerHTML = `
-          <select data-type="${type}" data-index="${index}" data-field="type">
-            <option value="visitCount" ${condition.type === 'visitCount' ? 'selected' : ''}>訪問回数</option>
-            <option value="referrer" ${condition.type === 'referrer' ? 'selected' : ''}>リファラーURL</option>
-          </select>
+          <div class="other-condition-left">
+            <span class="other-condition-label">訪問回数</span>
+            <input type="number" class="other-condition-number" data-type="${type}" data-index="${index}" data-field="visitCount" value="${condition.visitCount || '0'}" min="0">
+            <span class="other-condition-label">以上</span>
+          </div>
+          <div class="other-condition-right">
+            <span class="other-condition-label">リファラーURL</span>
+            <input type="text" class="other-condition-url" data-type="${type}" data-index="${index}" data-field="referrer" value="${condition.referrer || ''}" placeholder="例) /^https?:\/\/(www\.)?example\.com\/horse\/123$/i">
+          </div>
+        `;
+      } else {
+        row.className = 'condition-row';
+        row.innerHTML = `
           <input type="text" data-type="${type}" data-index="${index}" data-field="value" value="${condition.value || ''}" placeholder="値を入力">
           <select data-type="${type}" data-index="${index}" data-field="condition">
             ${conditionTypes.map(ct => `<option value="${ct.value}" ${condition.condition === ct.value ? 'selected' : ''}>${ct.label}</option>`).join('')}
@@ -349,131 +325,9 @@
           }
           <button class="btn-remove" onclick="removeConditionRow('${type}', ${index})">削除</button>
         `;
-      } else {
-        row.innerHTML = `
-          <div class="suggest-input-wrapper">
-            <input type="text" 
-                   id="${inputId}"
-                   data-type="${type}" 
-                   data-index="${index}" 
-                   data-field="value" 
-                   value="${condition.value || ''}" 
-                   placeholder="値を入力"
-                   autocomplete="off">
-            <div class="suggest-dropdown" id="${dropdownId}"></div>
-          </div>
-          <select data-type="${type}" data-index="${index}" data-field="condition">
-            ${conditionTypes.map(ct => `<option value="${ct.value}" ${condition.condition === ct.value ? 'selected' : ''}>${ct.label}</option>`).join('')}
-          </select>
-          ${isMultiValueCondition(condition.condition) ? 
-            `<textarea data-type="${type}" data-index="${index}" data-field="values" placeholder="改行区切りで入力">${(condition.values || []).join('\n')}</textarea>` :
-            ''
-          }
-          <button class="btn-remove" onclick="removeConditionRow('${type}', ${index})">削除</button>
-        `;
       }
       
-      // 最後の追加ボタンの前に挿入
-      const footer = container.querySelector('.condition-footer');
-      if (footer) {
-        container.insertBefore(row, footer);
-      } else {
-        container.appendChild(row);
-      }
-      
-      // サジェスト機能のイベントリスナーを追加
-      if (type !== 'other') {
-        setupSuggest(inputId, dropdownId, type);
-      }
-    }
-
-    function setupSuggest(inputId, dropdownId, type) {
-      const input = document.getElementById(inputId);
-      const dropdown = document.getElementById(dropdownId);
-      
-      if (!input || !dropdown) return;
-      
-      let currentIndex = -1;
-      
-      input.addEventListener('input', (e) => {
-        const value = e.target.value.toLowerCase();
-        const suggestions = getSuggestions(type, value);
-        
-        if (suggestions.length === 0 || value === '') {
-          dropdown.classList.remove('show');
-          return;
-        }
-        
-        dropdown.innerHTML = suggestions
-          .map((s, i) => `<div class="suggest-option ${i === 0 ? 'active' : ''}" data-value="${s}">${s}</div>`)
-          .join('');
-        dropdown.classList.add('show');
-        currentIndex = -1;
-      });
-      
-      input.addEventListener('keydown', (e) => {
-        const options = dropdown.querySelectorAll('.suggest-option');
-        
-        if (e.key === 'ArrowDown') {
-          e.preventDefault();
-          currentIndex = Math.min(currentIndex + 1, options.length - 1);
-          updateActiveOption(options, currentIndex);
-        } else if (e.key === 'ArrowUp') {
-          e.preventDefault();
-          currentIndex = Math.max(currentIndex - 1, -1);
-          updateActiveOption(options, currentIndex);
-        } else if (e.key === 'Enter') {
-          e.preventDefault();
-          if (currentIndex >= 0 && options[currentIndex]) {
-            input.value = options[currentIndex].dataset.value;
-            dropdown.classList.remove('show');
-            input.dispatchEvent(new Event('change'));
-          }
-        } else if (e.key === 'Escape') {
-          dropdown.classList.remove('show');
-        }
-      });
-      
-      dropdown.addEventListener('click', (e) => {
-        const option = e.target.closest('.suggest-option');
-        if (option) {
-          input.value = option.dataset.value;
-          dropdown.classList.remove('show');
-          input.dispatchEvent(new Event('change'));
-        }
-      });
-      
-      // クリック外を検知して閉じる
-      document.addEventListener('click', (e) => {
-        if (!input.contains(e.target) && !dropdown.contains(e.target)) {
-          dropdown.classList.remove('show');
-        }
-      });
-    }
-
-    function getSuggestions(type, value) {
-      if (!suggestionData) return [];
-      
-      const dataMap = {
-        device: suggestionData.devices || [],
-        browser: suggestionData.browsers || [],
-        os: suggestionData.oss || [],
-        language: suggestionData.languages || []
-      };
-      
-      const data = dataMap[type] || [];
-      return data.filter(item => item.toLowerCase().includes(value)).slice(0, 10);
-    }
-
-    function updateActiveOption(options, index) {
-      options.forEach((opt, i) => {
-        if (i === index) {
-          opt.classList.add('active');
-          opt.scrollIntoView({ block: 'nearest' });
-        } else {
-          opt.classList.remove('active');
-        }
-      });
+      container.appendChild(row);
     }
 
     function isMultiValueCondition(conditionType) {
@@ -482,19 +336,20 @@
 
     function addConditionRow(type) {
       if (!conditions[type]) conditions[type] = [];
-      conditions[type].push({ value: '', condition: 'exact', values: [] });
+      
+      if (type === 'other') {
+        conditions[type].push({ visitCount: '0', referrer: '' });
+      } else {
+        conditions[type].push({ value: '', condition: 'exact', values: [] });
+      }
+      
       renderConditionRow(type, conditions[type].length - 1);
     }
 
     function removeConditionRow(type, index) {
       conditions[type].splice(index, 1);
       const container = document.getElementById(`condition-${type}`);
-      
-      // 追加ボタンを除く全ての行を削除
-      const rows = container.querySelectorAll('.condition-row');
-      rows.forEach(row => row.remove());
-      
-      // 条件を再描画
+      container.innerHTML = '';
       conditions[type].forEach((_, i) => renderConditionRow(type, i));
       
       if (conditions[type].length === 0) {
@@ -525,14 +380,36 @@
           conditions[type][index][field] = e.target.value;
         }
         
-        // 条件タイプが変更されたら、テキストエリアを再描画
-        if (field === 'condition') {
+        if (field === 'condition' && type !== 'other') {
           const container = document.getElementById(`condition-${type}`);
-          // 追加ボタンを除く全ての行を削除
-          const rows = container.querySelectorAll('.condition-row');
-          rows.forEach(row => row.remove());
-          // 条件を再描画
+          container.innerHTML = '';
           conditions[type].forEach((_, i) => renderConditionRow(type, i));
+        }
+      }
+    });
+
+    document.addEventListener('input', (e) => {
+      if (e.target.dataset.type && e.target.dataset.index !== undefined) {
+        const type = e.target.dataset.type;
+        const index = parseInt(e.target.dataset.index);
+        const field = e.target.dataset.field;
+        
+        if (field === 'value') {
+          conditions[type][index][field] = e.target.value;
+        }
+      }
+      
+      if (e.target.dataset.creativeIndex !== undefined) {
+        const index = parseInt(e.target.dataset.creativeIndex);
+        const field = e.target.dataset.field;
+        
+        if (field === 'isOriginal') {
+          creatives[index][field] = e.target.checked;
+          renderCreatives();
+        } else if (field === 'distribution') {
+          creatives[index][field] = parseFloat(e.target.value) || 0;
+        } else {
+          creatives[index][field] = e.target.value;
         }
       }
     });
@@ -601,22 +478,6 @@
       });
     }
 
-    document.addEventListener('input', (e) => {
-      if (e.target.dataset.creativeIndex !== undefined) {
-        const index = parseInt(e.target.dataset.creativeIndex);
-        const field = e.target.dataset.field;
-        
-        if (field === 'isOriginal') {
-          creatives[index][field] = e.target.checked;
-          renderCreatives();
-        } else if (field === 'distribution') {
-          creatives[index][field] = parseFloat(e.target.value) || 0;
-        } else {
-          creatives[index][field] = e.target.value;
-        }
-      }
-    });
-
     function openCodeModal(index) {
       currentCreativeIndex = index;
       const creative = creatives[index];
@@ -670,7 +531,7 @@
 
         if (res.ok) {
           alert('保存しました');
-          location.href = `abtest-list.html?id=${projectId}`;
+          location.href = `test_index.html?id=${projectId}`;
         } else {
           alert('保存に失敗しました');
         }
@@ -681,7 +542,7 @@
     }
 
     function goBack() {
-      location.href = `abtest-list.html?id=${projectId}`;
+      location.href = `test_index.html?id=${projectId}`;
     }
 
     loadABTest();
