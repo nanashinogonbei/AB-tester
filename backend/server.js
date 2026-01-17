@@ -71,7 +71,11 @@ const abtestSchema = new mongoose.Schema({
 		language: [{ value: String, condition: String, values: [String] }],
 		os: [{ value: String, condition: String, values: [String] }],
 		browser: [{ value: String, condition: String, values: [String] }],
-		other: [{ type: String, value: String, condition: String, values: [String] }]
+		// otherは異なる構造を持つ
+		other: [{
+			visitCount: { type: String, default: '0' },
+			referrer: { type: String, default: '' }
+		}]
 	},
 	creatives: [{
 		name: String,
@@ -487,35 +491,81 @@ app.get('/api/abtests/:id', async (req, res) => {
 	}
 });
 
-app.put('/api/abtests/:id', async (req, res) => {
-	try {
-		req.body.updatedAt = new Date();
-		const abtest = await ABTest.findByIdAndUpdate(
-			req.params.id,
-			req.body,
-			{ new: true }
-		);
-		if (!abtest) {
-			return res.status(404).json({ error: 'ABTest not found' });
-		}
-		res.json(abtest);
-	} catch (err) {
-		console.error('Update ABTest error:', err);
-		res.status(500).json({ error: err.message });
-	}
+// server.js の app.post('/api/abtests') と app.put('/api/abtests/:id') を以下に置き換えてください
+
+app.post('/api/abtests', async (req, res) => {
+  try {
+    // 必須項目のバリデーション
+    if (!req.body.name || req.body.name.trim() === '') {
+      return res.status(400).json({ error: 'テスト名は必須です' });
+    }
+    
+    if (!req.body.cvCode || req.body.cvCode.trim() === '') {
+      return res.status(400).json({ error: 'CVコードは必須です' });
+    }
+    
+    if (!req.body.creatives || req.body.creatives.length === 0) {
+      return res.status(400).json({ error: '最低1つのクリエイティブが必要です' });
+    }
+    
+    // オプション項目のデフォルト値設定
+    const abtestData = {
+      ...req.body,
+      targetUrl: req.body.targetUrl || '', // 空なら全体
+      excludeUrl: req.body.excludeUrl || '', // 空ならフィルターなし
+      startDate: req.body.startDate || null, // 空なら即実行
+      endDate: req.body.endDate || null, // 空なら終了なし
+    };
+    
+    const abtest = new ABTest(abtestData);
+    const saved = await abtest.save();
+    res.json(saved);
+  } catch (err) {
+    console.error('Create ABTest error:', err);
+    res.status(500).json({ error: err.message });
+  }
 });
 
-app.delete('/api/abtests/:id', async (req, res) => {
-	try {
-		const abtest = await ABTest.findByIdAndDelete(req.params.id);
-		if (!abtest) {
-			return res.status(404).json({ error: 'ABTest not found' });
-		}
-		res.json({ success: true });
-	} catch (err) {
-		console.error('Delete ABTest error:', err);
-		res.status(500).json({ error: err.message });
-	}
+app.put('/api/abtests/:id', async (req, res) => {
+  try {
+    // 必須項目のバリデーション
+    if (!req.body.name || req.body.name.trim() === '') {
+      return res.status(400).json({ error: 'テスト名は必須です' });
+    }
+    
+    if (!req.body.cvCode || req.body.cvCode.trim() === '') {
+      return res.status(400).json({ error: 'CVコードは必須です' });
+    }
+    
+    if (!req.body.creatives || req.body.creatives.length === 0) {
+      return res.status(400).json({ error: '最低1つのクリエイティブが必要です' });
+    }
+    
+    // オプション項目のデフォルト値設定
+    const updateData = {
+      ...req.body,
+      targetUrl: req.body.targetUrl || '',
+      excludeUrl: req.body.excludeUrl || '',
+      startDate: req.body.startDate || null,
+      endDate: req.body.endDate || null,
+      updatedAt: new Date()
+    };
+    
+    const abtest = await ABTest.findByIdAndUpdate(
+      req.params.id,
+      updateData,
+      { new: true, runValidators: true }
+    );
+    
+    if (!abtest) {
+      return res.status(404).json({ error: 'ABTest not found' });
+    }
+    
+    res.json(abtest);
+  } catch (err) {
+    console.error('Update ABTest error:', err);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 app.put('/api/abtests/:id/toggle', async (req, res) => {
@@ -533,6 +583,218 @@ app.put('/api/abtests/:id/toggle', async (req, res) => {
 		res.status(500).json({ error: err.message });
 	}
 });
+
+// ABテスト実行用API - クライアントから呼ばれる
+app.post('/api/abtests/execute', async (req, res) => {
+	try {
+		const { projectId, url, userAgent, language, visitCount, referrer } = req.body;
+
+		if (!projectId) {
+			return res.status(400).json({ error: 'projectId is required' });
+		}
+
+		// アクティブなABテストを取得
+		const abtests = await ABTest.find({ 
+			projectId: projectId,
+			active: true 
+		});
+
+		const now = new Date();
+		const agent = useragent.parse(userAgent);
+		
+		// デバイスタイプの判定
+		let deviceType = 'other';
+		const deviceFamily = agent.device.family;
+		if (deviceFamily === 'Other' || deviceFamily === 'Desktop') {
+			deviceType = 'PC';
+		} else if (deviceFamily.includes('iPad') || deviceFamily.includes('Tablet')) {
+			deviceType = 'Tablet';
+		} else if (deviceFamily.includes('iPhone') || deviceFamily.includes('Android') || 
+		           deviceFamily.includes('Mobile')) {
+			deviceType = 'SP';
+		}
+
+		const userContext = {
+			url: url,
+			device: deviceType,
+			browser: agent.family,
+			os: agent.os.family,
+			language: language || 'unknown',
+			visitCount: parseInt(visitCount) || 0,
+			referrer: referrer || ''
+		};
+
+		// マッチするABテストを探す
+		for (const abtest of abtests) {
+			// 期間チェック
+			if (abtest.startDate && now < new Date(abtest.startDate)) continue;
+			if (abtest.endDate && now > new Date(abtest.endDate)) continue;
+
+			// 対象URLチェック
+			if (abtest.targetUrl && !matchUrl(url, abtest.targetUrl)) continue;
+
+			// 除外URLチェック
+			if (abtest.excludeUrl && matchUrl(url, abtest.excludeUrl)) continue;
+
+			// 実行条件チェック
+			if (!checkConditions(abtest.conditions, userContext)) continue;
+
+			// マッチした場合、クリエイティブを選択
+			const creative = selectCreative(abtest.creatives);
+			if (creative) {
+				return res.json({
+					matched: true,
+					abtestId: abtest._id,
+					creative: {
+						name: creative.name,
+						css: creative.css,
+						javascript: creative.javascript,
+						isOriginal: creative.isOriginal
+					}
+				});
+			}
+		}
+
+		// マッチするテストがない場合
+		res.json({ matched: false });
+	} catch (err) {
+		console.error('ABTest execute error:', err);
+		res.status(500).json({ error: err.message });
+	}
+});
+
+// URL マッチング関数
+function matchUrl(url, pattern) {
+	if (!pattern) return true;
+	
+	// 正規表現パターンの場合
+	if (pattern.startsWith('/') && pattern.includes('/')) {
+		try {
+			const regex = new RegExp(pattern.slice(1, pattern.lastIndexOf('/')), 
+			                         pattern.slice(pattern.lastIndexOf('/') + 1));
+			return regex.test(url);
+		} catch (e) {
+			console.error('Invalid regex pattern:', pattern);
+			return false;
+		}
+	}
+	
+	// 通常の文字列マッチング
+	return url.includes(pattern);
+}
+
+// 条件チェック関数
+function checkConditions(conditions, context) {
+	if (!conditions) return true;
+
+	// デバイス条件
+	if (conditions.device && conditions.device.length > 0) {
+		if (!checkConditionArray(conditions.device, context.device)) return false;
+	}
+
+	// ブラウザ条件
+	if (conditions.browser && conditions.browser.length > 0) {
+		if (!checkConditionArray(conditions.browser, context.browser)) return false;
+	}
+
+	// OS条件
+	if (conditions.os && conditions.os.length > 0) {
+		if (!checkConditionArray(conditions.os, context.os)) return false;
+	}
+
+	// 言語条件
+	if (conditions.language && conditions.language.length > 0) {
+		if (!checkConditionArray(conditions.language, context.language)) return false;
+	}
+
+	// その他の条件
+	if (conditions.other && conditions.other.length > 0) {
+		for (const cond of conditions.other) {
+			// 訪問回数チェック
+			const requiredVisitCount = parseInt(cond.visitCount) || 0;
+			if (context.visitCount < requiredVisitCount) return false;
+
+			// リファラーチェック
+			if (cond.referrer && cond.referrer.trim() !== '') {
+				if (!matchUrl(context.referrer, cond.referrer)) return false;
+			}
+		}
+	}
+
+	return true;
+}
+
+// 条件配列チェック関数
+function checkConditionArray(conditions, value) {
+	for (const cond of conditions) {
+		if (checkSingleCondition(cond, value)) return true;
+	}
+	return false;
+}
+
+// 単一条件チェック関数
+function checkSingleCondition(condition, value) {
+	const condValue = condition.value || '';
+	const condType = condition.condition || 'exact';
+
+	switch (condType) {
+		case 'exact':
+			return value === condValue;
+		case 'contains':
+			return value.includes(condValue);
+		case 'startsWith':
+			return value.startsWith(condValue);
+		case 'endsWith':
+			return value.endsWith(condValue);
+		case 'regex':
+			try {
+				return new RegExp(condValue).test(value);
+			} catch (e) {
+				return false;
+			}
+		case 'oneOf':
+			return (condition.values || []).includes(value);
+		case 'notRegex':
+			try {
+				return !new RegExp(condValue).test(value);
+			} catch (e) {
+				return true;
+			}
+		case 'notStartsWith':
+			return !value.startsWith(condValue);
+		case 'notEndsWith':
+			return !value.endsWith(condValue);
+		case 'notContains':
+			return !value.includes(condValue);
+		case 'notOneOf':
+			return !(condition.values || []).includes(value);
+		default:
+			return false;
+	}
+}
+
+// クリエイティブ選択関数（配分に基づいて）
+function selectCreative(creatives) {
+	if (!creatives || creatives.length === 0) return null;
+
+	// オリジナルがあればそれを優先
+	const original = creatives.find(c => c.isOriginal);
+	if (original && Math.random() * 100 < (original.distribution || 0)) {
+		return original;
+	}
+
+	// 配分に基づいてランダム選択
+	const totalDistribution = creatives.reduce((sum, c) => sum + (c.distribution || 0), 0);
+	if (totalDistribution === 0) return creatives[0];
+
+	let random = Math.random() * totalDistribution;
+	for (const creative of creatives) {
+		random -= (creative.distribution || 0);
+		if (random <= 0) return creative;
+	}
+
+	return creatives[0];
+}
 
 app.get('/api/abtests/:id/stats', async (req, res) => {
 	try {

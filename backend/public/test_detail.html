@@ -500,15 +500,42 @@
     }
 
     async function saveABTest() {
+      // 必須項目のバリデーション
+      const testName = document.getElementById('test-name').value.trim();
+      const cvCode = document.getElementById('cv-code').value.trim();
+      
+      if (!testName) {
+        alert('テスト名を入力してください');
+        document.getElementById('test-name').focus();
+        return;
+      }
+      
+      if (!cvCode) {
+        alert('CVコードを入力してください');
+        document.getElementById('cv-code').focus();
+        return;
+      }
+      
+      if (creatives.length === 0) {
+        alert('最低1つのクリエイティブが必要です');
+        return;
+      }
+
+      // オプション項目の取得（空の場合はnullまたは空文字）
+      const targetUrl = document.getElementById('target-url').value.trim() || '';
+      const excludeUrl = document.getElementById('exclude-url').value.trim() || '';
+      const startDate = document.getElementById('start-date').value || null;
+      const endDate = document.getElementById('end-date').value || null;
+
       const data = {
         projectId: projectId,
-        name: document.getElementById('test-name').value,
+        name: testName,
         active: document.getElementById('test-active').checked,
-        cvCode: document.getElementById('cv-code').value,
-        targetUrl: document.getElementById('target-url').value,
-        excludeUrl: document.getElementById('exclude-url').value,
-        startDate: document.getElementById('start-date').value || null,
-        endDate: document.getElementById('end-date').value || null,
+        cvCode: cvCode,
+        targetUrl: targetUrl,
+        excludeUrl: excludeUrl,
+        startDate: startDate,
+        endDate: endDate,
         conditions: conditions,
         creatives: creatives
       };
@@ -533,7 +560,8 @@
           alert('保存しました');
           location.href = `test_index.html?id=${projectId}`;
         } else {
-          alert('保存に失敗しました');
+          const error = await res.json();
+          alert('保存に失敗しました: ' + (error.error || '不明なエラー'));
         }
       } catch (err) {
         console.error('Failed to save ABTest:', err);
