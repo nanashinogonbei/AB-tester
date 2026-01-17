@@ -56,6 +56,36 @@ const suggestionSchema = new mongoose.Schema({
 
 const Suggestion = mongoose.model('Suggestion', suggestionSchema);
 
+// ABテスト用のスキーマを追加
+const abtestSchema = new mongoose.Schema({
+	projectId: { type: mongoose.Schema.Types.ObjectId, ref: 'Project', required: true },
+	name: String,
+	active: { type: Boolean, default: false },
+	cvCode: String,
+	targetUrl: String,
+	excludeUrl: String,
+	startDate: Date,
+	endDate: Date,
+	conditions: {
+		device: [{ value: String, condition: String, values: [String] }],
+		language: [{ value: String, condition: String, values: [String] }],
+		os: [{ value: String, condition: String, values: [String] }],
+		browser: [{ value: String, condition: String, values: [String] }],
+		other: [{ type: String, value: String, condition: String, values: [String] }]
+	},
+	creatives: [{
+		name: String,
+		distribution: Number,
+		isOriginal: { type: Boolean, default: false },
+		css: String,
+		javascript: String
+	}],
+	createdAt: { type: Date, default: Date.now },
+	updatedAt: { type: Date, default: Date.now }
+});
+
+const ABTest = mongoose.model('ABTest', abtestSchema);
+
 // 日本時間（UTC+9）に変換する関数
 function toJST(date) {
 	const utcDate = new Date(date);
@@ -413,6 +443,117 @@ app.post('/track', async (req, res) => {
 		res.json({ status: 'ok' });
 	} catch (err) {
 		console.error('Track error:', err);
+		res.status(500).json({ error: err.message });
+	}
+});
+
+// ABテスト関連のAPI
+app.get('/api/abtests', async (req, res) => {
+	try {
+		const { projectId } = req.query;
+		if (!projectId) {
+			return res.status(400).json({ error: 'projectId is required' });
+		}
+
+		const abtests = await ABTest.find({ projectId }).sort({ createdAt: -1 });
+		res.json(abtests);
+	} catch (err) {
+		console.error('Get ABTests error:', err);
+		res.status(500).json({ error: err.message });
+	}
+});
+
+app.post('/api/abtests', async (req, res) => {
+	try {
+		const abtest = new ABTest(req.body);
+		const saved = await abtest.save();
+		res.json(saved);
+	} catch (err) {
+		console.error('Create ABTest error:', err);
+		res.status(500).json({ error: err.message });
+	}
+});
+
+app.get('/api/abtests/:id', async (req, res) => {
+	try {
+		const abtest = await ABTest.findById(req.params.id);
+		if (!abtest) {
+			return res.status(404).json({ error: 'ABTest not found' });
+		}
+		res.json(abtest);
+	} catch (err) {
+		console.error('Get ABTest error:', err);
+		res.status(500).json({ error: err.message });
+	}
+});
+
+app.put('/api/abtests/:id', async (req, res) => {
+	try {
+		req.body.updatedAt = new Date();
+		const abtest = await ABTest.findByIdAndUpdate(
+			req.params.id,
+			req.body,
+			{ new: true }
+		);
+		if (!abtest) {
+			return res.status(404).json({ error: 'ABTest not found' });
+		}
+		res.json(abtest);
+	} catch (err) {
+		console.error('Update ABTest error:', err);
+		res.status(500).json({ error: err.message });
+	}
+});
+
+app.delete('/api/abtests/:id', async (req, res) => {
+	try {
+		const abtest = await ABTest.findByIdAndDelete(req.params.id);
+		if (!abtest) {
+			return res.status(404).json({ error: 'ABTest not found' });
+		}
+		res.json({ success: true });
+	} catch (err) {
+		console.error('Delete ABTest error:', err);
+		res.status(500).json({ error: err.message });
+	}
+});
+
+app.put('/api/abtests/:id/toggle', async (req, res) => {
+	try {
+		const abtest = await ABTest.findById(req.params.id);
+		if (!abtest) {
+			return res.status(404).json({ error: 'ABTest not found' });
+		}
+		abtest.active = !abtest.active;
+		abtest.updatedAt = new Date();
+		await abtest.save();
+		res.json(abtest);
+	} catch (err) {
+		console.error('Toggle ABTest error:', err);
+		res.status(500).json({ error: err.message });
+	}
+});
+
+app.get('/api/abtests/:id/stats', async (req, res) => {
+	try {
+		const abtest = await ABTest.findById(req.params.id);
+		if (!abtest) {
+			return res.status(404).json({ error: 'ABTest not found' });
+		}
+
+		// ABテストの統計情報を計算
+		// 実装は後で拡張可能
+		const stats = abtest.creatives.map((creative, index) => ({
+			creativeId: index,
+			name: creative.name,
+			impressions: 0,
+			conversions: 0,
+			cvr: 0
+		}));
+
+		res.json(stats);
+	} catch (err) {
+		console.error('Get ABTest stats error:', err);
 		res.status(500).json({ error: err.message });
 	}
 });

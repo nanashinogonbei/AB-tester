@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ABテスト一覧 - Webトラッカー</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50">
+  <div class="min-h-screen flex">
+    <aside class="w-64 bg-white min-h-screen border-r">
+      <div class="p-6">
+        <div class="mt-4 space-y-1">
+          <div class="px-4 py-2 text-sm"><a href="./admin.html">プロジェクト管理</a></div>
+          <div class="px-4 py-2 text-sm text-gray-500">アカウント管理</div>
+        </div>
+      </div>
+    </aside>
+
+    <main class="flex-1 p-8">
+      <div class="flex justify-between items-center mb-8">
+        <div>
+          <h1 id="project-name" class="text-2xl font-bold">読み込み中...</h1>
+          <p id="project-url" class="text-sm text-gray-600"></p>
+        </div>
+        <a href="admin.html" class="text-blue-500 text-sm hover:underline">戻る</a>
+      </div>
+
+      <div id="abtests-list" class="space-y-4 mb-8"></div>
+
+      <button id="create-btn" class="bg-blue-500 text-white px-6 py-3 rounded hover:bg-blue-600">
+        新規テストを作成
+      </button>
+    </main>
+  </div>
+
+  <script>
+    const API_URL = '/api';
+    const projectId = new URLSearchParams(location.search).get('id');
+    
+    let project = null;
+
+    async function loadProject() {
+      const res = await fetch(`${API_URL}/projects`);
+      const projects = await res.json();
+      project = projects.find(p => p._id === projectId);
+      
+      document.getElementById('project-name').textContent = project.name;
+      document.getElementById('project-url').textContent = project.url;
+    }
+
+    async function loadABTests() {
+      try {
+        const res = await fetch(`${API_URL}/abtests?projectId=${projectId}`);
+        const abtests = await res.json();
+        
+        const list = document.getElementById('abtests-list');
+        if (abtests.length === 0) {
+          list.innerHTML = '<div class="text-center py-8 text-gray-500">ABテストがありません</div>';
+          return;
+        }
+
+        list.innerHTML = abtests.map(abtest => {
+          const dateRange = formatDateRange(abtest.startDate, abtest.endDate);
+          return `
+            <div class="bg-gray-100 rounded-lg p-6 flex items-start gap-6">
+              <div class="w-32 h-24 bg-gray-300 rounded flex-shrink-0"></div>
+              
+              <div class="flex-1">
+                <h3 class="font-bold text-lg mb-1">${abtest.name}</h3>
+                <p class="text-sm text-gray-600 mb-1">対象URL：${abtest.targetUrl}</p>
+                <p class="text-sm text-gray-600 mb-3">テスト期間：${dateRange}</p>
+                <div class="flex gap-4">
+                  <a href="test_detail.html?id=${abtest._id}&projectId=${projectId}" class="text-blue-500 text-sm hover:underline">詳細</a>
+                  <a href="#" data-abtest-id="${abtest._id}" class="delete-link text-red-500 text-sm hover:underline">削除</a>
+                </div>
+              </div>
+
+              <div class="flex items-center gap-3">
+                <span class="text-sm font-medium ${abtest.active ? 'text-green-600' : 'text-gray-500'}">${abtest.active ? 'ON' : 'OFF'}</span>
+                <label class="relative inline-block w-14 h-8 cursor-pointer">
+                  <input type="checkbox" 
+                         class="sr-only toggle-switch" 
+                         data-abtest-id="${abtest._id}"
+                         ${abtest.active ? 'checked' : ''}>
+                  <span class="absolute inset-0 bg-gray-300 rounded-full transition-colors ${abtest.active ? 'bg-green-500' : ''}"></span>
+                  <span class="absolute left-1 top-1 w-6 h-6 bg-white rounded-full transition-transform ${abtest.active ? 'transform translate-x-6' : ''}"></span>
+                </label>
+              </div>
+            </div>
+          `;
+        }).join('');
+      } catch (err) {
+        console.error('Failed to load ABTests:', err);
+      }
+    }
+
+    function formatDateRange(start, end) {
+      if (!start && !end) return '期間設定なし';
+      const formatDate = (date) => {
+        if (!date) return '';
+        const d = new Date(date);
+        return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`;
+      };
+      return `${formatDate(start)} 〜 ${formatDate(end)}`;
+    }
+
+    async function toggleABTest(abtestId) {
+      try {
+        await fetch(`${API_URL}/abtests/${abtestId}/toggle`, {
+          method: 'PUT'
+        });
+        loadABTests();
+      } catch (err) {
+        console.error('Failed to toggle ABTest:', err);
+        alert('切り替えに失敗しました');
+      }
+    }
+
+    async function deleteABTest(abtestId) {
+      if (!confirm('このABテストを削除してもよろしいですか？')) {
+        return;
+      }
+
+      try {
+        const res = await fetch(`${API_URL}/abtests/${abtestId}`, {
+          method: 'DELETE'
+        });
+        
+        if (res.ok) {
+          alert('ABテストを削除しました');
+          loadABTests();
+        } else {
+          alert('削除に失敗しました');
+        }
+      } catch (err) {
+        console.error('Failed to delete ABTest:', err);
+        alert('削除に失敗しました');
+      }
+    }
+
+    function createABTest() {
+      location.href = `test_detail.html?projectId=${projectId}`;
+    }
+
+    document.getElementById('create-btn').addEventListener('click', createABTest);
+
+    document.getElementById('abtests-list').addEventListener('click', (e) => {
+      const toggle = e.target.closest('.toggle-switch');
+      if (toggle) {
+        toggleABTest(toggle.dataset.abtestId);
+        return;
+      }
+
+      const deleteLink = e.target.closest('.delete-link');
+      if (deleteLink) {
+        e.preventDefault();
+        deleteABTest(deleteLink.dataset.abtestId);
+        return;
+      }
+    });
+
+    async function init() {
+      await loadProject();
+      await loadABTests();
+    }
+
+    init();
+  </script>
+</body>
+</html>

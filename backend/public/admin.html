@@ -10,7 +10,6 @@
 	<div class="min-h-screen flex">
 		<aside class="w-64 bg-white min-h-screen border-r">
 			<div class="p-6">
-				<button class="w-full px-4 py-2 text-sm border rounded mb-2">プロジェクト一覧</button>
 				<div class="mt-4 space-y-1">
 					<div class="px-4 py-2 text-sm">プロジェクト管理</div>
 					<div class="px-4 py-2 text-sm text-gray-500">アカウント管理</div>
@@ -44,7 +43,7 @@
 							<h3 class="font-bold text-lg mb-1">${project.name}</h3>
 							<p class="text-sm text-gray-600 mb-3">${project.url}</p>
 							<div class="flex gap-4">
-								<a href="analytics.html?id=${project._id}" class="text-blue-500 text-sm hover:underline">ABテスト</a>
+								<a href="test_index.html?id=${project._id}" class="text-blue-500 text-sm hover:underline">ABテスト</a>
 								<a href="analytics.html?id=${project._id}" class="text-blue-500 text-sm hover:underline">アクセス解析</a>
 								<a href="#" data-project-id="${project._id}" class="delete-link text-red-500 text-sm hover:underline">削除</a>
 							</div>
