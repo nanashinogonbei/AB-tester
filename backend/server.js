@@ -66,6 +66,7 @@ const abtestSchema = new mongoose.Schema({
 	excludeUrl: String,
 	startDate: Date,
 	endDate: Date,
+	sessionDuration: { type: Number, default: 720 }, // デフォルト12時間（分単位）
 	conditions: {
 		device: [{ value: String, condition: String, values: [String] }],
 		language: [{ value: String, condition: String, values: [String] }],
@@ -469,7 +470,30 @@ app.get('/api/abtests', async (req, res) => {
 
 app.post('/api/abtests', async (req, res) => {
 	try {
-		const abtest = new ABTest(req.body);
+		// 必須項目のバリデーション
+		if (!req.body.name || req.body.name.trim() === '') {
+			return res.status(400).json({ error: 'テスト名は必須です' });
+		}
+		
+		if (!req.body.cvCode || req.body.cvCode.trim() === '') {
+			return res.status(400).json({ error: 'CVコードは必須です' });
+		}
+		
+		if (!req.body.creatives || req.body.creatives.length === 0) {
+			return res.status(400).json({ error: '最低1つのクリエイティブが必要です' });
+		}
+		
+		// オプション項目のデフォルト値設定
+		const abtestData = {
+			...req.body,
+			targetUrl: req.body.targetUrl || '',
+			excludeUrl: req.body.excludeUrl || '',
+			startDate: req.body.startDate || null,
+			endDate: req.body.endDate || null,
+			sessionDuration: req.body.sessionDuration || 720, // デフォルト12時間
+		};
+		
+		const abtest = new ABTest(abtestData);
 		const saved = await abtest.save();
 		res.json(saved);
 	} catch (err) {
@@ -491,81 +515,60 @@ app.get('/api/abtests/:id', async (req, res) => {
 	}
 });
 
-// server.js の app.post('/api/abtests') と app.put('/api/abtests/:id') を以下に置き換えてください
-
-app.post('/api/abtests', async (req, res) => {
-  try {
-    // 必須項目のバリデーション
-    if (!req.body.name || req.body.name.trim() === '') {
-      return res.status(400).json({ error: 'テスト名は必須です' });
-    }
-    
-    if (!req.body.cvCode || req.body.cvCode.trim() === '') {
-      return res.status(400).json({ error: 'CVコードは必須です' });
-    }
-    
-    if (!req.body.creatives || req.body.creatives.length === 0) {
-      return res.status(400).json({ error: '最低1つのクリエイティブが必要です' });
-    }
-    
-    // オプション項目のデフォルト値設定
-    const abtestData = {
-      ...req.body,
-      targetUrl: req.body.targetUrl || '', // 空なら全体
-      excludeUrl: req.body.excludeUrl || '', // 空ならフィルターなし
-      startDate: req.body.startDate || null, // 空なら即実行
-      endDate: req.body.endDate || null, // 空なら終了なし
-    };
-    
-    const abtest = new ABTest(abtestData);
-    const saved = await abtest.save();
-    res.json(saved);
-  } catch (err) {
-    console.error('Create ABTest error:', err);
-    res.status(500).json({ error: err.message });
-  }
+app.put('/api/abtests/:id', async (req, res) => {
+	try {
+		// 必須項目のバリデーション
+		if (!req.body.name || req.body.name.trim() === '') {
+			return res.status(400).json({ error: 'テスト名は必須です' });
+		}
+		
+		if (!req.body.cvCode || req.body.cvCode.trim() === '') {
+			return res.status(400).json({ error: 'CVコードは必須です' });
+		}
+		
+		if (!req.body.creatives || req.body.creatives.length === 0) {
+			return res.status(400).json({ error: '最低1つのクリエイティブが必要です' });
+		}
+		
+		// オプション項目のデフォルト値設定
+		const updateData = {
+			...req.body,
+			targetUrl: req.body.targetUrl || '',
+			excludeUrl: req.body.excludeUrl || '',
+			startDate: req.body.startDate || null,
+			endDate: req.body.endDate || null,
+			sessionDuration: req.body.sessionDuration || 720,
+			updatedAt: new Date()
+		};
+		
+		const abtest = await ABTest.findByIdAndUpdate(
+			req.params.id,
+			updateData,
+			{ new: true, runValidators: true }
+		);
+		
+		if (!abtest) {
+			return res.status(404).json({ error: 'ABTest not found' });
+		}
+		
+		res.json(abtest);
+	} catch (err) {
+		console.error('Update ABTest error:', err);
+		res.status(500).json({ error: err.message });
+	}
 });
 
-app.put('/api/abtests/:id', async (req, res) => {
-  try {
-    // 必須項目のバリデーション
-    if (!req.body.name || req.body.name.trim() === '') {
-      return res.status(400).json({ error: 'テスト名は必須です' });
-    }
-    
-    if (!req.body.cvCode || req.body.cvCode.trim() === '') {
-      return res.status(400).json({ error: 'CVコードは必須です' });
-    }
-    
-    if (!req.body.creatives || req.body.creatives.length === 0) {
-      return res.status(400).json({ error: '最低1つのクリエイティブが必要です' });
-    }
-    
-    // オプション項目のデフォルト値設定
-    const updateData = {
-      ...req.body,
-      targetUrl: req.body.targetUrl || '',
-      excludeUrl: req.body.excludeUrl || '',
-      startDate: req.body.startDate || null,
-      endDate: req.body.endDate || null,
-      updatedAt: new Date()
-    };
-    
-    const abtest = await ABTest.findByIdAndUpdate(
-      req.params.id,
-      updateData,
-      { new: true, runValidators: true }
-    );
-    
-    if (!abtest) {
-      return res.status(404).json({ error: 'ABTest not found' });
-    }
-    
-    res.json(abtest);
-  } catch (err) {
-    console.error('Update ABTest error:', err);
-    res.status(500).json({ error: err.message });
-  }
+app.delete('/api/abtests/:id', async (req, res) => {
+	try {
+		const abtest = await ABTest.findByIdAndDelete(req.params.id);
+		if (!abtest) {
+			return res.status(404).json({ error: 'ABTest not found' });
+		}
+		res.json({ success: true });
+	} catch (err) {
+		console.error('Delete ABTest error:', err);
+		res.status(500).json({ error: err.message });
+	}
 });
 
 app.put('/api/abtests/:id/toggle', async (req, res) => {
@@ -589,6 +592,14 @@ app.post('/api/abtests/execute', async (req, res) => {
 	try {
 		const { projectId, url, userAgent, language, visitCount, referrer } = req.body;
 
+		console.log('[ABTest Execute] リクエスト受信:', {
+			projectId,
+			url,
+			visitCount,
+			language,
+			userAgent: userAgent?.substring(0, 50) + '...'
+		});
+
 		if (!projectId) {
 			return res.status(400).json({ error: 'projectId is required' });
 		}
@@ -598,6 +609,12 @@ app.post('/api/abtests/execute', async (req, res) => {
 			projectId: projectId,
 			active: true 
 		});
+
+		console.log('[ABTest Execute] アクティブなテスト数:', abtests.length);
+
+		if (abtests.length === 0) {
+			return res.json({ matched: false });
+		}
 
 		const now = new Date();
 		const agent = useragent.parse(userAgent);
@@ -624,27 +641,56 @@ app.post('/api/abtests/execute', async (req, res) => {
 			referrer: referrer || ''
 		};
 
+		console.log('[ABTest Execute] ユーザーコンテキスト:', userContext);
+
 		// マッチするABテストを探す
 		for (const abtest of abtests) {
+			console.log('[ABTest Execute] テストをチェック:', abtest.name);
+
 			// 期間チェック
-			if (abtest.startDate && now < new Date(abtest.startDate)) continue;
-			if (abtest.endDate && now > new Date(abtest.endDate)) continue;
+			if (abtest.startDate && now < new Date(abtest.startDate)) {
+				console.log('  → 期間外（開始前）');
+				continue;
+			}
+			if (abtest.endDate && now > new Date(abtest.endDate)) {
+				console.log('  → 期間外（終了後）');
+				continue;
+			}
 
-			// 対象URLチェック
-			if (abtest.targetUrl && !matchUrl(url, abtest.targetUrl)) continue;
+			// 対象URLチェック（空の場合は全てマッチ）
+			if (abtest.targetUrl && abtest.targetUrl.trim() !== '') {
+				if (!matchUrl(url, abtest.targetUrl)) {
+					console.log('  → 対象URLにマッチしない');
+					continue;
+				}
+			}
 
-			// 除外URLチェック
-			if (abtest.excludeUrl && matchUrl(url, abtest.excludeUrl)) continue;
+			// 除外URLチェック（空の場合はスキップ）
+			if (abtest.excludeUrl && abtest.excludeUrl.trim() !== '') {
+				if (matchUrl(url, abtest.excludeUrl)) {
+					console.log('  → 除外URLにマッチ');
+					continue;
+				}
+			}
 
 			// 実行条件チェック
-			if (!checkConditions(abtest.conditions, userContext)) continue;
+			const conditionsMatch = checkConditions(abtest.conditions, userContext);
+			if (!conditionsMatch) {
+				console.log('  → 実行条件にマッチしない');
+				continue;
+			}
+
+			console.log('  ✅ マッチしました！');
 
 			// マッチした場合、クリエイティブを選択
 			const creative = selectCreative(abtest.creatives);
 			if (creative) {
+				console.log('[ABTest Execute] クリエイティブ選択:', creative.name);
 				return res.json({
 					matched: true,
 					abtestId: abtest._id,
+					abtestName: abtest.name,
+					sessionDuration: abtest.sessionDuration || 720,
 					creative: {
 						name: creative.name,
 						css: creative.css,
@@ -656,30 +702,33 @@ app.post('/api/abtests/execute', async (req, res) => {
 		}
 
 		// マッチするテストがない場合
+		console.log('[ABTest Execute] マッチするテストなし');
 		res.json({ matched: false });
 	} catch (err) {
-		console.error('ABTest execute error:', err);
+		console.error('[ABTest Execute] エラー:', err);
 		res.status(500).json({ error: err.message });
 	}
 });
 
 // URL マッチング関数
 function matchUrl(url, pattern) {
-	if (!pattern) return true;
+	if (!pattern || pattern.trim() === '') return true;
 	
 	// 正規表現パターンの場合
 	if (pattern.startsWith('/') && pattern.includes('/')) {
 		try {
-			const regex = new RegExp(pattern.slice(1, pattern.lastIndexOf('/')), 
-			                         pattern.slice(pattern.lastIndexOf('/') + 1));
+			const lastSlash = pattern.lastIndexOf('/');
+			const regexPattern = pattern.slice(1, lastSlash);
+			const flags = pattern.slice(lastSlash + 1);
+			const regex = new RegExp(regexPattern, flags);
 			return regex.test(url);
 		} catch (e) {
-			console.error('Invalid regex pattern:', pattern);
+			console.error('Invalid regex pattern:', pattern, e);
 			return false;
 		}
 	}
 	
-	// 通常の文字列マッチング
+	// 通常の文字列マッチング（部分一致）
 	return url.includes(pattern);
 }
 
@@ -687,24 +736,24 @@ function matchUrl(url, pattern) {
 function checkConditions(conditions, context) {
 	if (!conditions) return true;
 
-	// デバイス条件
-	if (conditions.device && conditions.device.length > 0) {
-		if (!checkConditionArray(conditions.device, context.device)) return false;
-	}
-
-	// ブラウザ条件
-	if (conditions.browser && conditions.browser.length > 0) {
-		if (!checkConditionArray(conditions.browser, context.browser)) return false;
-	}
-
-	// OS条件
-	if (conditions.os && conditions.os.length > 0) {
-		if (!checkConditionArray(conditions.os, context.os)) return false;
-	}
-
-	// 言語条件
-	if (conditions.language && conditions.language.length > 0) {
-		if (!checkConditionArray(conditions.language, context.language)) return false;
+	// 各条件タイプをチェック
+	const conditionTypes = ['device', 'browser', 'os', 'language'];
+	
+	for (const type of conditionTypes) {
+		if (conditions[type] && conditions[type].length > 0) {
+			// 空の条件（valueが空）がある場合は、その条件はスキップ
+			const validConditions = conditions[type].filter(c => c.value && c.value.trim() !== '');
+			
+			// 有効な条件がない場合はスキップ
+			if (validConditions.length === 0) continue;
+			
+			// 条件配列のいずれかにマッチすればOK（OR条件）
+			const matched = checkConditionArray(validConditions, context[type]);
+			if (!matched) {
+				console.log(`  → ${type}条件にマッチしない:`, context[type]);
+				return false;
+			}
+		}
 	}
 
 	// その他の条件
@@ -712,11 +761,17 @@ function checkConditions(conditions, context) {
 		for (const cond of conditions.other) {
 			// 訪問回数チェック
 			const requiredVisitCount = parseInt(cond.visitCount) || 0;
-			if (context.visitCount < requiredVisitCount) return false;
+			if (context.visitCount < requiredVisitCount) {
+				console.log(`  → 訪問回数条件にマッチしない: ${context.visitCount} < ${requiredVisitCount}`);
+				return false;
+			}
 
-			// リファラーチェック
+			// リファラーチェック（空でない場合のみ）
 			if (cond.referrer && cond.referrer.trim() !== '') {
-				if (!matchUrl(context.referrer, cond.referrer)) return false;
+				if (!matchUrl(context.referrer, cond.referrer)) {
+					console.log(`  → リファラー条件にマッチしない: ${context.referrer}`);
+					return false;
+				}
 			}
 		}
 	}
@@ -724,10 +779,13 @@ function checkConditions(conditions, context) {
 	return true;
 }
 
-// 条件配列チェック関数
+// 条件配列チェック関数（OR条件）
 function checkConditionArray(conditions, value) {
+	// いずれかの条件にマッチすればtrue
 	for (const cond of conditions) {
-		if (checkSingleCondition(cond, value)) return true;
+		if (checkSingleCondition(cond, value)) {
+			return true;
+		}
 	}
 	return false;
 }
@@ -750,6 +808,7 @@ function checkSingleCondition(condition, value) {
 			try {
 				return new RegExp(condValue).test(value);
 			} catch (e) {
+				console.error('Regex error:', e);
 				return false;
 			}
 		case 'oneOf':
@@ -777,22 +836,26 @@ function checkSingleCondition(condition, value) {
 function selectCreative(creatives) {
 	if (!creatives || creatives.length === 0) return null;
 
-	// オリジナルがあればそれを優先
-	const original = creatives.find(c => c.isOriginal);
-	if (original && Math.random() * 100 < (original.distribution || 0)) {
-		return original;
+	// 配分の合計を計算
+	const totalDistribution = creatives.reduce((sum, c) => sum + (c.distribution || 0), 0);
+	
+	// 配分が設定されていない場合は最初のクリエイティブを返す
+	if (totalDistribution === 0) {
+		console.log('[ABTest] 配分が0のため最初のクリエイティブを使用');
+		return creatives[0];
 	}
 
 	// 配分に基づいてランダム選択
-	const totalDistribution = creatives.reduce((sum, c) => sum + (c.distribution || 0), 0);
-	if (totalDistribution === 0) return creatives[0];
-
 	let random = Math.random() * totalDistribution;
+	
 	for (const creative of creatives) {
 		random -= (creative.distribution || 0);
-		if (random <= 0) return creative;
+		if (random <= 0) {
+			return creative;
+		}
 	}
 
+	// フォールバック
 	return creatives[0];
 }
 

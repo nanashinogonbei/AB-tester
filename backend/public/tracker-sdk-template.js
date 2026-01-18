@@ -7,6 +7,9 @@
 	// クライアント側でプロトコルを判定してサーバーURLを構築
 	const SERVER_URL = (window.location.protocol === 'https:' ? 'https://' : 'http://') + SERVER_HOST;
 
+	// デバッグモードの判定
+	const isDebugMode = window.location.search.includes('tracker_debug=1');
+
 	// URLパラメーターをチェック
 	const urlParams = new URLSearchParams(window.location.search);
 	const isVoidMode = urlParams.get('gh_void') === '0';
@@ -35,6 +38,49 @@
 	let visitCount = parseInt(localStorage.getItem('tracker_visit_count') || '0');
 	visitCount++;
 	localStorage.setItem('tracker_visit_count', visitCount.toString());
+
+	// セッション管理関数
+	function getSessionKey(abtestId) {
+		return `abtest_session_${abtestId}`;
+	}
+
+	function getSessionData(abtestId) {
+		const key = getSessionKey(abtestId);
+		const data = localStorage.getItem(key);
+		if (!data) return null;
+		
+		try {
+			return JSON.parse(data);
+		} catch (e) {
+			console.error('[ABTest] Session data parse error:', e);
+			return null;
+		}
+	}
+
+	function setSessionData(abtestId, creativeData, sessionDuration) {
+		const key = getSessionKey(abtestId);
+		const expiresAt = Date.now() + (sessionDuration * 60 * 1000); // 分をミリ秒に変換
+		
+		const sessionData = {
+			creative: creativeData,
+			expiresAt: expiresAt
+		};
+		
+		localStorage.setItem(key, JSON.stringify(sessionData));
+		
+		if (isDebugMode) {
+			console.log('[ABTest] セッション保存:', {
+				abtestId,
+				sessionDuration: `${sessionDuration}分`,
+				expiresAt: new Date(expiresAt).toLocaleString()
+			});
+		}
+	}
+
+	function isSessionValid(sessionData) {
+		if (!sessionData || !sessionData.expiresAt) return false;
+		return Date.now() < sessionData.expiresAt;
+	}
 
 	// トラッキング関数
 	window.trackerEvent = function (eventName, isExit = false) {
@@ -66,6 +112,16 @@
 	// ABテスト実行関数
 	async function executeABTest() {
 		try {
+			if (isDebugMode) {
+				console.log('[ABTest] Requesting test execution...', {
+					projectId: PROJECT_ID,
+					url: window.location.href,
+					visitCount: visitCount,
+					userAgent: navigator.userAgent,
+					language: navigator.language
+				});
+			}
+
 			const response = await fetch(`${SERVER_URL}/api/abtests/execute`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
@@ -79,51 +135,90 @@
 				})
 			});
 
+			if (!response.ok) {
+				console.error('[ABTest] Server error:', response.status);
+				return;
+			}
+
 			const result = await response.json();
 
-			if (result.matched && result.creative) {
+			if (isDebugMode) {
+				console.log('[ABTest] Server response:', result);
+			}
+
+			if (result.matched && result.abtestId) {
+				// セッションチェック
+				const sessionData = getSessionData(result.abtestId);
+				let creative = null;
+
+				if (sessionData && isSessionValid(sessionData)) {
+					// セッションが有効な場合は保存されたクリエイティブを使用
+					creative = sessionData.creative;
+					console.log('[ABTest] 🔄 セッションからクリエイティブを復元:', {
+						テスト名: result.abtestName || 'N/A',
+						クリエイティブ名: creative.name || '(名称なし)',
+						オリジナル: creative.isOriginal ? 'はい' : 'いいえ',
+						セッション有効期限: new Date(sessionData.expiresAt).toLocaleString()
+					});
+				} else {
+					// 新しいクリエイティブを使用してセッションを保存
+					creative = result.creative;
+					const sessionDuration = result.sessionDuration || 720; // デフォルト12時間
+					setSessionData(result.abtestId, creative, sessionDuration);
+					
+					console.log('[ABTest] ✅ 新しいクリエイティブが適用されました:', {
+						テスト名: result.abtestName || 'N/A',
+						クリエイティブ名: creative.name || '(名称なし)',
+						オリジナル: creative.isOriginal ? 'はい' : 'いいえ',
+						CSS: creative.css ? 'あり' : 'なし',
+						JavaScript: creative.javascript ? 'あり' : 'なし',
+						セッション期間: `${sessionDuration}分`
+					});
+				}
+
 				// オリジナルの場合は何もしない
-				if (result.creative.isOriginal) {
-					console.log('[ABTest] Original version selected');
+				if (creative.isOriginal) {
+					console.log('[ABTest] オリジナル版が選択されました（変更なし）');
 					return;
 				}
 
 				// CSSの適用
-				if (result.creative.css && result.creative.css.trim() !== '') {
+				if (creative.css && creative.css.trim() !== '') {
 					const style = document.createElement('style');
-					style.textContent = result.creative.css;
+					style.textContent = creative.css;
 					document.head.appendChild(style);
-					console.log('[ABTest] CSS applied');
-				}
-
-				// JavaScriptの実行
-				if (result.creative.javascript && result.creative.javascript.trim() !== '') {
-					// DOMContentLoadedを待ってから実行
-					if (document.readyState === 'loading') {
-						document.addEventListener('DOMContentLoaded', () => {
-							try {
-								eval(result.creative.javascript);
-								console.log('[ABTest] JavaScript executed');
-							} catch (err) {
-								console.error('[ABTest] JavaScript execution error:', err);
-							}
-						});
-					} else {
-						try {
-							eval(result.creative.javascript);
-							console.log('[ABTest] JavaScript executed');
-						} catch (err) {
-							console.error('[ABTest] JavaScript execution error:', err);
-						}
+					console.log('[ABTest] ✓ CSSを適用しました');
+					if (isDebugMode) {
+						console.log('[ABTest] CSS内容:', creative.css);
 					}
 				}
 
-				console.log('[ABTest] Creative applied:', result.creative.name);
+				// JavaScriptの実行
+				if (creative.javascript && creative.javascript.trim() !== '') {
+					// DOMContentLoadedを待ってから実行
+					const executeJS = () => {
+						try {
+							eval(creative.javascript);
+							console.log('[ABTest] ✓ JavaScriptを実行しました');
+							if (isDebugMode) {
+								console.log('[ABTest] JavaScript内容:', creative.javascript);
+							}
+						} catch (err) {
+							console.error('[ABTest] ❌ JavaScript実行エラー:', err);
+						}
+					};
+
+					if (document.readyState === 'loading') {
+						document.addEventListener('DOMContentLoaded', executeJS);
+					} else {
+						executeJS();
+					}
+				}
 			} else {
-				console.log('[ABTest] No matching test found');
+				console.log('[ABTest] ℹ️ マッチするテストがありません');
 			}
 		} catch (err) {
-			console.error('[ABTest] Execution error:', err);
+			console.error('[ABTest] ❌ 実行エラー:', err);
 		}
 	}
 
@@ -144,13 +239,14 @@
 		trackerEvent('page_leave', true);
 	});
 
-	// デバッグ用（本番環境では削除可能）
-	if (window.location.search.includes('tracker_debug=1')) {
-		console.log('[Tracker] Initialized', {
+	// 初期化完了ログ
+	if (isDebugMode) {
+		console.log('[Tracker] ✅ 初期化完了', {
 			projectId: PROJECT_ID,
 			userId: userId,
 			serverUrl: SERVER_URL,
-			visitCount: visitCount
+			visitCount: visitCount,
+			isFirstVisit: isFirstVisit
 		});
 	}
 })();
