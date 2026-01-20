@@ -627,7 +627,6 @@
 
         if (res.ok) {
           alert('保存しました');
-          location.href = `test_index.html?id=${projectId}`;
         } else {
           const error = await res.json();
           alert('保存に失敗しました: ' + (error.error || '不明なエラー'));
@@ -643,6 +642,7 @@
     }
 
     let statsData = null;
+
     async function loadABTestStats() {
       if (!abtestId) return;
       
@@ -731,7 +731,7 @@
     async function init() {
       await loadSuggestions();
       await loadABTest();
-      await loadABTestStats(); // 統計情報の読み込みを追加
+      await loadABTestStats();
     }
 
     init();
