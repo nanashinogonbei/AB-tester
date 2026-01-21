@@ -1,15 +1,15 @@
 ﻿# tracker
 
 ## トラッキング機能
-https://example.com/page1
-→ トラッキングされる
+- https://example.com/page1
+	→ トラッキングされる
 
-**gh_void**
-https://example.com/page1?gh_void=0
-→ アクセス解析は記録しない、ABテストを記録しない
+### gh_void
+- https://example.com/page1?gh_void=0
+	→ アクセス解析は記録しない、ABテストを記録しない
 
-https://example.com/page1?gh_void=1
-→ アクセス解析は記録しない、ABテストは行わず、記録もしない
+- https://example.com/page1?gh_void=1
+	→ アクセス解析は記録しない、ABテストは行わず、記録もしない
 
 **gh_id, gh_creative**
 https://example.com/page1?gh_id=[String]&gh_creative=[num]
