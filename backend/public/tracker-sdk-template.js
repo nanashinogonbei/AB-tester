@@ -12,16 +12,39 @@
 
 	// URLパラメーターをチェック
 	const urlParams = new URLSearchParams(window.location.search);
-	const isVoidMode = urlParams.get('gh_void') === '0';
+	const ghVoid = urlParams.get('gh_void');
+	const ghId = urlParams.get('gh_id');
+	const ghCreative = urlParams.get('gh_creative');
 	
-	// gh_void=0が設定されている場合はトラッキングを無効化
-	if (isVoidMode) {
-		console.log('[Tracker] Tracking disabled: gh_void=0 detected');
+	// パラメーター処理のログ
+	if (isDebugMode) {
+		console.log('[Tracker] URL Parameters:', {
+			gh_void: ghVoid,
+			gh_id: ghId,
+			gh_creative: ghCreative
+		});
+	}
+
+	// gh_void=0: アクセス解析を記録しない、ABテストを記録しない
+	// gh_void=1: アクセス解析を記録しない、ABテストを行わず記録もしない
+	const shouldSkipTracking = ghVoid === '0' || ghVoid === '1';
+	const shouldSkipABTest = ghVoid === '1';
+	
+	// gh_id と gh_creative が指定されている場合は強制実行モード
+	const isForceCreativeMode = ghId && ghCreative !== null;
+	
+	if (shouldSkipTracking && !isForceCreativeMode) {
+		console.log('[Tracker] Tracking disabled: gh_void=' + ghVoid + ' detected');
 		// ダミー関数を設定（エラーを防ぐため）
 		window.trackerEvent = function() {
 			console.log('[Tracker] Event ignored (void mode)');
 		};
-		return; // ここで処理を終了
+		
+		// gh_void=1の場合はABテストも実行しない
+		if (shouldSkipABTest) {
+			console.log('[Tracker] ABTest disabled: gh_void=1 detected');
+			return;
+		}
 	}
 
 	// ユーザーIDの管理
@@ -84,6 +107,14 @@
 
 	// ABテストインプレッションログ送信関数
 	async function logABTestImpression(abtestId, creativeIndex, creativeName, isOriginal) {
+		// 記録をスキップする場合
+		if (shouldSkipTracking) {
+			if (isDebugMode) {
+				console.log('[ABTest] インプレッションログ記録スキップ (gh_void=' + ghVoid + ')');
+			}
+			return;
+		}
+
 		try {
 			const data = {
 				projectId: PROJECT_ID,
@@ -120,6 +151,14 @@
 
 	// トラッキング関数
 	window.trackerEvent = function (eventName, isExit = false) {
+		// 記録をスキップする場合
+		if (shouldSkipTracking) {
+			if (isDebugMode) {
+				console.log('[Tracker] Event ignored (gh_void=' + ghVoid + '): ' + eventName);
+			}
+			return;
+		}
+
 		const data = {
 			projectId: PROJECT_ID,
 			apiKey: API_KEY,
@@ -144,6 +183,91 @@
 			}).catch(err => console.error('[Tracker] Error:', err));
 		}
 	};
+
+	// 強制クリエイティブ実行関数
+	async function executeForceCreative() {
+		try {
+			console.log('[ABTest] 🎯 強制クリエイティブモード:', {
+				abtestId: ghId,
+				creativeIndex: ghCreative,
+				shouldRecord: !shouldSkipTracking
+			});
+
+			const response = await fetch(`${SERVER_URL}/api/abtests/${ghId}/creative/${ghCreative}`);
+
+			if (!response.ok) {
+				console.error('[ABTest] 指定されたクリエイティブが見つかりません');
+				return;
+			}
+
+			const result = await response.json();
+
+			if (isDebugMode) {
+				console.log('[ABTest] Server response:', result);
+			}
+
+			const creative = result.creative;
+
+			// 記録が必要な場合のみログを送信
+			if (!shouldSkipTracking) {
+				await logABTestImpression(
+					result.abtestId,
+					creative.index,
+					creative.name,
+					creative.isOriginal
+				);
+			}
+
+			console.log('[ABTest] ✅ 強制クリエイティブが適用されました:', {
+				テスト名: result.abtestName || 'N/A',
+				クリエイティブ名: creative.name || '(名称なし)',
+				クリエイティブインデックス: creative.index,
+				オリジナル: creative.isOriginal ? 'はい' : 'いいえ',
+				記録: shouldSkipTracking ? 'スキップ' : '記録'
+			});
+
+			// オリジナルの場合は何もしない
+			if (creative.isOriginal) {
+				console.log('[ABTest] オリジナル版が選択されました（変更なし）');
+				return;
+			}
+
+			// CSSの適用
+			if (creative.css && creative.css.trim() !== '') {
+				const style = document.createElement('style');
+				style.textContent = creative.css;
+				document.head.appendChild(style);
+				console.log('[ABTest] ✓ CSSを適用しました');
+				if (isDebugMode) {
+					console.log('[ABTest] CSS内容:', creative.css);
+				}
+			}
+
+			// JavaScriptの実行
+			if (creative.javascript && creative.javascript.trim() !== '') {
+				// DOMContentLoadedを待ってから実行
+				const executeJS = () => {
+					try {
+						eval(creative.javascript);
+						console.log('[ABTest] ✓ JavaScriptを実行しました');
+						if (isDebugMode) {
+							console.log('[ABTest] JavaScript内容:', creative.javascript);
+						}
+					} catch (err) {
+						console.error('[ABTest] ❌ JavaScript実行エラー:', err);
+					}
+				};
+
+				if (document.readyState === 'loading') {
+					document.addEventListener('DOMContentLoaded', executeJS);
+				} else {
+					executeJS();
+				}
+			}
+		} catch (err) {
+			console.error('[ABTest] ❌ 強制クリエイティブ実行エラー:', err);
+		}
+	}
 
 	// ABテスト実行関数
 	async function executeABTest() {
@@ -271,22 +395,33 @@
 		}
 	}
 
-	// ABテストを実行
-	executeABTest();
+	// ABテスト実行処理
+	if (isForceCreativeMode) {
+		// 強制クリエイティブモード
+		executeForceCreative();
+	} else if (!shouldSkipABTest) {
+		// 通常のABテスト実行
+		executeABTest();
+	} else {
+		console.log('[ABTest] ABテスト実行スキップ (gh_void=1)');
+	}
 
-	// 初回訪問時は first_view、それ以外は page_view
-	trackerEvent(isFirstVisit ? 'first_view' : 'page_view');
+	// トラッキング処理
+	if (!shouldSkipTracking) {
+		// 初回訪問時は first_view、それ以外は page_view
+		trackerEvent(isFirstVisit ? 'first_view' : 'page_view');
 
-	// ページ離脱イベントの検出
-	window.addEventListener('visibilitychange', () => {
-		if (document.visibilityState === 'hidden') {
+		// ページ離脱イベントの検出
+		window.addEventListener('visibilitychange', () => {
+			if (document.visibilityState === 'hidden') {
+				trackerEvent('page_leave', true);
+			}
+		});
+		
+		window.addEventListener('pagehide', () => {
 			trackerEvent('page_leave', true);
-		}
-	});
-	
-	window.addEventListener('pagehide', () => {
-		trackerEvent('page_leave', true);
-	});
+		});
+	}
 
 	// 初期化完了ログ
 	if (isDebugMode) {
@@ -295,7 +430,9 @@
 			userId: userId,
 			serverUrl: SERVER_URL,
 			visitCount: visitCount,
-			isFirstVisit: isFirstVisit
+			isFirstVisit: isFirstVisit,
+			trackingMode: shouldSkipTracking ? 'disabled' : 'enabled',
+			abtestMode: shouldSkipABTest ? 'disabled' : (isForceCreativeMode ? 'force' : 'normal')
 		});
 	}
 })();

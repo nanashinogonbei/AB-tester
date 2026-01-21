@@ -30,6 +30,41 @@ app.use('/api/abtests', abtestRoutes);
 app.use('/tracker', trackerRoutes);
 app.post('/track', trackerRoutes);
 
+// 特定のABテストとクリエイティブを取得するエンドポイント
+app.get('/api/abtests/:abtestId/creative/:creativeIndex', async (req, res) => {
+  try {
+    const ABTest = require('./models/ABTest');
+    const abtest = await ABTest.findById(req.params.abtestId);
+    
+    if (!abtest) {
+      return res.status(404).json({ error: 'ABTest not found' });
+    }
+    
+    const creativeIndex = parseInt(req.params.creativeIndex);
+    if (creativeIndex < 0 || creativeIndex >= abtest.creatives.length) {
+      return res.status(404).json({ error: 'Creative not found' });
+    }
+    
+    const creative = abtest.creatives[creativeIndex];
+    
+    res.json({
+      abtestId: abtest._id,
+      abtestName: abtest.name,
+      sessionDuration: abtest.sessionDuration || 720,
+      creative: {
+        index: creativeIndex,
+        name: creative.name,
+        css: creative.css,
+        javascript: creative.javascript,
+        isOriginal: creative.isOriginal
+      }
+    });
+  } catch (err) {
+    console.error('Get specific creative error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // サジェスト更新のcron設定（0時と12時に実行）
 cron.schedule('0 0,12 * * *', () => {
   console.log('[Cron] Triggering suggestion update');
