@@ -21,11 +21,13 @@ const projectRoutes = require('./routes/projects');
 const analyticsRoutes = require('./routes/analytics');
 const abtestRoutes = require('./routes/abtests');
 const trackerRoutes = require('./routes/tracker');
+const accountRoutes = require('./routes/accounts');
 
 // APIルート設定（静的ファイルの前に）
 app.use('/api/projects', projectRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/abtests', abtestRoutes);
+app.use('/api/accounts', accountRoutes);
 app.use('/tracker', trackerRoutes);
 app.post('/track', trackerRoutes);
 
