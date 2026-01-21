@@ -13,6 +13,7 @@
         <div class="mt-4 space-y-1">
           <div class="px-4 py-2 text-sm"><a href="./admin.html">プロジェクト管理</a></div>
           <div class="px-4 py-2 text-sm">アカウント管理</div>
+          <div class="px-4 py-2 text-sm"><a href="#" id="logout-btn" class="text-red-600 hover:text-red-800">ログアウト</a>
         </div>
       </div>
     </aside>
@@ -102,6 +103,18 @@
 
     document.getElementById('create-btn').addEventListener('click', () => {
       location.href = 'account_detail.html';
+    });
+
+    // ログイン機能
+    if (sessionStorage.getItem('loggedIn') !== 'true') {
+      window.location.href = 'index.html';
+    }
+    document.getElementById('logout-btn').addEventListener('click', (e) => {
+      e.preventDefault();
+      if (confirm('ログアウトしますか？')) {
+        sessionStorage.clear();
+        window.location.href = 'index.html';
+      }
     });
 
     loadAccounts();

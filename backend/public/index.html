@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ログイン - Webトラッカー</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50">
+  <div class="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+    <div class="max-w-md w-full space-y-8">
+      <div>
+        <h2 class="mt-6 text-center text-3xl font-extrabold text-gray-900">
+          Webトラッカー
+        </h2>
+        <p class="mt-2 text-center text-sm text-gray-600">
+          アカウントでログインしてください
+        </p>
+      </div>
+      
+      <div class="mt-8 bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10">
+        <form class="space-y-6" id="login-form">
+          <div>
+            <label for="account-id" class="block text-sm font-medium text-gray-700">
+              アカウントID
+            </label>
+            <div class="mt-1">
+              <input 
+                id="account-id" 
+                name="accountId" 
+                type="text" 
+                required 
+                class="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                placeholder="半角英数字で入力"
+                autocomplete="username"
+              >
+            </div>
+          </div>
+
+          <div>
+            <label for="password" class="block text-sm font-medium text-gray-700">
+              パスワード
+            </label>
+            <div class="mt-1 relative">
+              <input 
+                id="password" 
+                name="password" 
+                type="password" 
+                required 
+                class="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm pr-10"
+                placeholder="パスワードを入力"
+                autocomplete="current-password"
+              >
+              <button 
+                type="button"
+                id="toggle-password"
+                class="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
+              >
+                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <div id="error-message" class="hidden">
+            <div class="rounded-md bg-red-50 p-4">
+              <div class="flex">
+                <div class="flex-shrink-0">
+                  <svg class="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
+                  </svg>
+                </div>
+                <div class="ml-3">
+                  <p class="text-sm font-medium text-red-800" id="error-text"></p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <button 
+              type="submit"
+              class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            >
+              ログイン
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const API_URL = '/api';
+
+    // パスワード表示/非表示の切り替え
+    document.getElementById('toggle-password').addEventListener('click', () => {
+      const passwordInput = document.getElementById('password');
+      const type = passwordInput.type === 'password' ? 'text' : 'password';
+      passwordInput.type = type;
+    });
+
+    // エラーメッセージ表示関数
+    function showError(message) {
+      const errorDiv = document.getElementById('error-message');
+      const errorText = document.getElementById('error-text');
+      errorText.textContent = message;
+      errorDiv.classList.remove('hidden');
+      
+      setTimeout(() => {
+        errorDiv.classList.add('hidden');
+      }, 5000);
+    }
+
+    // ログインフォーム送信
+    document.getElementById('login-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const accountId = document.getElementById('account-id').value.trim();
+      const password = document.getElementById('password').value.trim();
+      
+      if (!accountId || !password) {
+        showError('アカウントIDとパスワードを入力してください');
+        return;
+      }
+      
+      try {
+        // アカウント一覧を取得して認証
+        const res = await fetch(`${API_URL}/accounts`);
+        
+        if (!res.ok) {
+          showError('サーバーエラーが発生しました');
+          return;
+        }
+        
+        const accounts = await res.json();
+        
+        // アカウントIDとパスワードが一致するか確認
+        const account = accounts.find(acc => 
+          acc.accountId === accountId && acc.password === password
+        );
+        
+        if (!account) {
+          showError('アカウントIDまたはパスワードが正しくありません');
+          return;
+        }
+        
+        // ログイン成功 - セッション情報を保存
+        sessionStorage.setItem('loggedIn', 'true');
+        sessionStorage.setItem('accountId', account.accountId);
+        sessionStorage.setItem('allProjects', account.allProjects);
+        
+        if (!account.allProjects && account.permissionIds) {
+          sessionStorage.setItem('permissionIds', JSON.stringify(account.permissionIds));
+        }
+        
+        // 管理画面にリダイレクト
+        window.location.href = 'admin.html';
+        
+      } catch (err) {
+        console.error('Login error:', err);
+        showError('ログイン処理中にエラーが発生しました');
+      }
+    });
+
+    // 既にログイン済みの場合は管理画面にリダイレクト
+    if (sessionStorage.getItem('loggedIn') === 'true') {
+      window.location.href = 'admin.html';
+    }
+  </script>
+</body>
+</html>

@@ -13,6 +13,8 @@
         <div class="mt-4 space-y-1">
           <div class="px-4 py-2 text-sm"><a href="./admin.html">プロジェクト管理</a></div>
           <div class="px-4 py-2 text-sm">アカウント管理</div>
+          <div class="px-4 py-2 text-sm"><a href="#" id="logout-btn" class="text-red-600 hover:text-red-800">ログアウト</a>
+      </div>
         </div>
       </div>
     </aside>
@@ -248,6 +250,18 @@
       } catch (err) {
         console.error('Failed to save account:', err);
         alert('保存に失敗しました');
+      }
+    });
+
+    // ログイン機能
+    if (sessionStorage.getItem('loggedIn') !== 'true') {
+      window.location.href = 'index.html';
+    }
+    document.getElementById('logout-btn').addEventListener('click', (e) => {
+      e.preventDefault();
+      if (confirm('ログアウトしますか？')) {
+        sessionStorage.clear();
+        window.location.href = 'index.html';
       }
     });
 
