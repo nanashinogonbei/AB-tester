@@ -1,8 +1,0 @@
-node_modules/
-backend/public/uploads/
-backend/exports/
-rebuild.sh
-.gitignore
-.env
-.DS_Store
-*.log
