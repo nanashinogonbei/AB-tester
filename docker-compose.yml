@@ -24,6 +24,9 @@ services:
       - mongo-data:/data/db
     environment:
       - TZ=Asia/Tokyo
+      # MongoDB認証を有効化
+      - MONGO_INITDB_ROOT_USERNAME=admin
+      - MONGO_INITDB_ROOT_PASSWORD=changeme
     networks:
       - default
 
