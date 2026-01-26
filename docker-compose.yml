@@ -13,6 +13,9 @@ services:
     environment:
       - NODE_ENV=production
       - TZ=Asia/Tokyo
+      # MongoDB認証情報を追加
+      - MONGO_USER=admin
+      - MONGO_PASSWORD=changeme
     networks:
       - tracker_network
       - default
@@ -21,7 +24,8 @@ services:
     ports:
       - "27017:27017"
     volumes:
-      - mongo-data:/data/db
+      # - mongo-data:/data/db
+      - ./data:/data/db
     environment:
       - TZ=Asia/Tokyo
       # MongoDB認証を有効化

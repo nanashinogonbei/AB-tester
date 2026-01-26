@@ -115,6 +115,7 @@
     }
 
     // ログインフォーム送信
+    // ログインフォーム送信（修正部分のみ）
     document.getElementById('login-form').addEventListener('submit', async (e) => {
       e.preventDefault();
       
@@ -127,33 +128,28 @@
       }
       
       try {
-        // アカウント一覧を取得して認証
-        const res = await fetch(`${API_URL}/accounts`);
+        const res = await fetch(`${API_URL}/auth/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ accountId, password })
+        });
         
         if (!res.ok) {
-          showError('サーバーエラーが発生しました');
+          const error = await res.json();
+          showError(error.error || 'ログインに失敗しました');
           return;
         }
         
-        const accounts = await res.json();
-        
-        // アカウントIDとパスワードが一致するか確認
-        const account = accounts.find(acc => 
-          acc.accountId === accountId && acc.password === password
-        );
-        
-        if (!account) {
-          showError('アカウントIDまたはパスワードが正しくありません');
-          return;
-        }
+        const data = await res.json();
         
         // ログイン成功 - セッション情報を保存
         sessionStorage.setItem('loggedIn', 'true');
-        sessionStorage.setItem('accountId', account.accountId);
-        sessionStorage.setItem('allProjects', account.allProjects);
+        sessionStorage.setItem('accountId', data.account.accountId);
+        sessionStorage.setItem('allProjects', data.account.allProjects);
+        sessionStorage.setItem('token', data.token);
         
-        if (!account.allProjects && account.permissionIds) {
-          sessionStorage.setItem('permissionIds', JSON.stringify(account.permissionIds));
+        if (!data.account.allProjects && data.account.permissionIds) {
+          sessionStorage.setItem('permissionIds', JSON.stringify(data.account.permissionIds));
         }
         
         // 管理画面にリダイレクト

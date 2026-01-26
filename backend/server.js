@@ -58,8 +58,8 @@ const accountRoutes = require('./routes/accounts');
 
 // 公開エンドポイント（認証不要）
 app.use('/api/auth', authRoutes);
-app.use('/tracker', trackerLimiter, trackerRoutes); // トラッキング用SDK配信
-app.use('/track', trackerLimiter, trackerRoutes);   // トラッキングデータ受信
+app.use('/tracker', trackingLimiter, trackerRoutes); // トラッキング用SDK配信
+app.use('/track', trackingLimiter, trackerRoutes);   // トラッキングデータ受信
 
 app.get('/api/abtests/:abtestId/creative/:creativeIndex', async (req, res) => {
   try {
