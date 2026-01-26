@@ -76,25 +76,62 @@
     let selectedFilters = { device: [], browser: [], os: [], language: ['ja'] };
     let eventRows = [];
 
+		// 認証付きfetchヘルパー関数
+		function authFetch(url, options = {}) {
+			const token = sessionStorage.getItem('token');
+			
+			if (!token) {
+				console.error('No token found, redirecting to login');
+				window.location.href = 'index.html';
+				return Promise.reject(new Error('No authentication token'));
+			}
+			
+			const headers = {
+				...options.headers,
+				'Authorization': `Bearer ${token}`
+			};
+			
+			return fetch(url, {
+				...options,
+				headers
+			});
+		}
+
     async function loadProject() {
       try {
-        const res = await fetch(`${API_URL}/projects`);
+        const res = await authFetch(`${API_URL}/projects`);
+				if (res.status === 401) {
+					alert('セッションが期限切れです。再度ログインしてください。');
+					sessionStorage.clear();
+					window.location.href = 'index.html';
+					return;
+				}
         const projects = await res.json();
         project = projects.find(p => p._id === projectId);
         
         document.getElementById('project-name').textContent = project.name;
         document.getElementById('project-url').textContent = project.url;
-      } catch (err) {
-        console.error('Failed to load project:', err);
-      }
+			} catch (err) {
+				console.error('Failed to load projects:', err);
+				if (err.message === 'No authentication token') {
+					return;
+				}
+				alert('プロジェクトの読み込みに失敗しました');
+			}
     }
 
     async function loadSuggestions() {
       try {
-        const res = await fetch(`${API_URL}/analytics/suggestions`);
+        const res = await authFetch(`${API_URL}/analytics/suggestions`);
         if (!res.ok) {
           throw new Error(`HTTP error! status: ${res.status}`);
         }
+				if (res.status === 401) {
+					alert('セッションが期限切れです。再度ログインしてください。');
+					sessionStorage.clear();
+					window.location.href = 'index.html';
+					return;
+				}
         suggestionData = await res.json();
         console.log('Suggestions loaded:', suggestionData);
       } catch (err) {
@@ -113,10 +150,16 @@
           if (values.length > 0) params.set(key, values.join(','));
         });
 
-        const res = await fetch(`${API_URL}/analytics/${projectId}?${params}`);
+        const res = await authFetch(`${API_URL}/analytics/${projectId}?${params}`);
         if (!res.ok) {
           throw new Error(`HTTP error! status: ${res.status}`);
         }
+				if (res.status === 401) {
+					alert('セッションが期限切れです。再度ログインしてください。');
+					sessionStorage.clear();
+					window.location.href = 'index.html';
+					return;
+				}
         analyticsData = await res.json();
         
         document.getElementById('unique-users').textContent = analyticsData.uniqueUsers;
@@ -138,9 +181,13 @@
         }
         
         eventRows.forEach((_, idx) => loadEventCount(idx));
-      } catch (err) {
-        console.error('Failed to load analytics:', err);
-      }
+			} catch (err) {
+				console.error('Failed to load analytics:', err);
+				if (err.message === 'No authentication token') {
+					return;
+				}
+				alert('プロジェクトの読み込みに失敗しました');
+			}
     }
     
     function updateFilterButtons() {
@@ -306,10 +353,16 @@
           if (values.length > 0) params.set(key, values.join(','));
         });
 
-        const res = await fetch(`${API_URL}/analytics/${projectId}?${params}`);
+        const res = await authFetch(`${API_URL}/analytics/${projectId}?${params}`);
         if (!res.ok) {
           throw new Error(`HTTP error! status: ${res.status}`);
         }
+				if (res.status === 401) {
+					alert('セッションが期限切れです。再度ログインしてください。');
+					sessionStorage.clear();
+					window.location.href = 'index.html';
+					return;
+				}
         analyticsData = await res.json();
         
         document.getElementById('unique-users').textContent = analyticsData.uniqueUsers;
@@ -325,9 +378,13 @@
           `).join('');
         
         eventRows.forEach((_, idx) => loadEventCount(idx));
-      } catch (err) {
-        console.error('Failed to load analytics:', err);
-      }
+			} catch (err) {
+				console.error('Failed to load analytics:', err);
+				if (err.message === 'No authentication token') {
+					return;
+				}
+				alert('アナリティクスの読み込みに失敗しました');
+			}
     }
 
     function updateFilter(key, value, checked) {
@@ -406,10 +463,16 @@
         const endDate = document.getElementById('end-date').value;
         const params = new URLSearchParams({ start: startDate, end: endDate, event });
 
-        const res = await fetch(`${API_URL}/analytics/${projectId}/event-count?${params}`);
+        const res = await authFetch(`${API_URL}/analytics/${projectId}/event-count?${params}`);
         if (!res.ok) {
           throw new Error(`HTTP error! status: ${res.status}`);
         }
+				if (res.status === 401) {
+					alert('セッションが期限切れです。再度ログインしてください。');
+					sessionStorage.clear();
+					window.location.href = 'index.html';
+					return;
+				}
         const data = await res.json();
         eventRows[rowId].count = data.count;
         document.getElementById(`event-count-${rowId}`).textContent = data.count;

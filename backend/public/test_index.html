@@ -42,8 +42,35 @@
     let project = null;
     let abtestsStats = new Map(); // ABテストIDをキーに統計情報を保存
 
+		// 認証付きfetchヘルパー関数
+		function authFetch(url, options = {}) {
+			const token = sessionStorage.getItem('token');
+			
+			if (!token) {
+				console.error('No token found, redirecting to login');
+				window.location.href = 'index.html';
+				return Promise.reject(new Error('No authentication token'));
+			}
+			
+			const headers = {
+				...options.headers,
+				'Authorization': `Bearer ${token}`
+			};
+			
+			return fetch(url, {
+				...options,
+				headers
+			});
+		}
+
     async function loadProject() {
-      const res = await fetch(`${API_URL}/projects`);
+      const res = await authFetch(`${API_URL}/projects`);
+      if (res.status === 401) {
+        alert('セッションが期限切れです。再度ログインしてください。');
+        sessionStorage.clear();
+        window.location.href = 'index.html';
+        return;
+      }
       const projects = await res.json();
       project = projects.find(p => p._id === projectId);
       
@@ -53,7 +80,13 @@
 
     async function loadABTestStats(abtestId) {
       try {
-        const res = await fetch(`${API_URL}/abtests/${abtestId}/stats`);
+        const res = await authFetch(`${API_URL}/abtests/${abtestId}/stats`);
+				if (res.status === 401) {
+					alert('セッションが期限切れです。再度ログインしてください。');
+					sessionStorage.clear();
+					window.location.href = 'index.html';
+					return;
+				}
         const stats = await res.json();
         abtestsStats.set(abtestId, stats);
         return stats;
@@ -65,7 +98,13 @@
 
     async function loadABTests() {
       try {
-        const res = await fetch(`${API_URL}/abtests?projectId=${projectId}`);
+        const res = await authFetch(`${API_URL}/abtests?projectId=${projectId}`);
+				if (res.status === 401) {
+					alert('セッションが期限切れです。再度ログインしてください。');
+					sessionStorage.clear();
+					window.location.href = 'index.html';
+					return;
+				}
         const abtests = await res.json();
         
         const list = document.getElementById('abtests-list');
@@ -141,7 +180,7 @@
 
     async function toggleABTest(abtestId) {
       try {
-        await fetch(`${API_URL}/abtests/${abtestId}/toggle`, {
+        await authFetch(`${API_URL}/abtests/${abtestId}/toggle`, {
           method: 'PUT'
         });
         loadABTests();
@@ -157,7 +196,7 @@
       }
 
       try {
-        const res = await fetch(`${API_URL}/abtests/${abtestId}`, {
+        const res = await authFetch(`${API_URL}/abtests/${abtestId}`, {
           method: 'DELETE'
         });
         

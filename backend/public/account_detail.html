@@ -89,18 +89,48 @@
     let projects = [];
     let selectedProjectIds = [];
 
+		// 認証付きfetchヘルパー関数
+		function authFetch(url, options = {}) {
+			const token = sessionStorage.getItem('token');
+			
+			if (!token) {
+				console.error('No token found, redirecting to login');
+				window.location.href = 'index.html';
+				return Promise.reject(new Error('No authentication token'));
+			}
+			
+			const headers = {
+				...options.headers,
+				'Authorization': `Bearer ${token}`
+			};
+			
+			return fetch(url, {
+				...options,
+				headers
+			});
+		}
+
     async function loadProjects() {
       try {
-        const res = await fetch(`${API_URL}/projects`);
+        const res = await authFetch(`${API_URL}/projects`);
+				if (res.status === 401) {
+					alert('セッションが期限切れです。再度ログインしてください。');
+					sessionStorage.clear();
+					window.location.href = 'index.html';
+					return;
+				}
         projects = await res.json();
         // アカウント情報を読み込んでいない場合のみレンダリング
         if (!accountId) {
           renderProjectCheckboxes();
         }
-      } catch (err) {
-        console.error('Failed to load projects:', err);
-        alert('プロジェクトの読み込みに失敗しました');
-      }
+			} catch (err) {
+				console.error('Failed to load projects:', err);
+				if (err.message === 'No authentication token') {
+					return;
+				}
+				alert('プロジェクトの読み込みに失敗しました');
+			}
     }
 
     function renderProjectCheckboxes() {
@@ -129,7 +159,13 @@
       if (!accountId) return;
 
       try {
-        const res = await fetch(`${API_URL}/accounts/${accountId}`);
+        const res = await authFetch(`${API_URL}/accounts/${accountId}`);
+				if (res.status === 401) {
+					alert('セッションが期限切れです。再度ログインしてください。');
+					sessionStorage.clear();
+					window.location.href = 'index.html';
+					return;
+				}
         const account = await res.json();
         
         document.getElementById('account-id').value = account.accountId;
@@ -147,10 +183,13 @@
         allProjectsCheckbox.checked = account.allProjects;
         
         updateProjectCheckboxesState();
-      } catch (err) {
-        console.error('Failed to load account:', err);
-        alert('アカウントの読み込みに失敗しました');
-      }
+			} catch (err) {
+				console.error('Failed to load accounts:', err);
+				if (err.message === 'No authentication token') {
+					return;
+				}
+				alert('アカウントの読み込みに失敗しました');
+			}
     }
 
     function updateAllProjectsCheckbox() {
@@ -227,13 +266,13 @@
       try {
         let res;
         if (accountId) {
-          res = await fetch(`${API_URL}/accounts/${accountId}`, {
+          res = await authFetch(`${API_URL}/accounts/${accountId}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(data)
           });
         } else {
-          res = await fetch(`${API_URL}/accounts`, {
+          res = await authFetch(`${API_URL}/accounts`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(data)
