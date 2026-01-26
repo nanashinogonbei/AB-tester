@@ -1,9 +1,8 @@
-require('dotenv').config();
-
 const envFile = process.env.NODE_ENV === 'production' 
   ? '.env.production' 
   : '.env.development';
 require('dotenv').config({ path: envFile });
+require('dotenv').config();
 
 const express = require('express');
 const cron = require('node-cron');
@@ -62,12 +61,6 @@ app.use('/api/auth', authRoutes);
 app.use('/tracker', trackerLimiter, trackerRoutes); // トラッキング用SDK配信
 app.use('/track', trackerLimiter, trackerRoutes);    // トラッキングデータ受信
 
-// 保護されたAPIエンドポイント（認証必要）
-app.use('/api/projects', apiLimiter, authenticate, projectRoutes);
-app.use('/api/analytics', apiLimiter, authenticate, analyticsRoutes);
-app.use('/api/abtests', apiLimiter, authenticate, abtestRoutes);
-app.use('/api/accounts', apiLimiter, authenticate, accountRoutes);
-
 // 特定のABテストとクリエイティブを取得（公開エンドポイント）
 app.get('/api/abtests/:abtestId/creative/:creativeIndex', async (req, res) => {
   try {
@@ -105,6 +98,12 @@ app.get('/api/abtests/:abtestId/creative/:creativeIndex', async (req, res) => {
 
 // 静的ファイルは最後に（ただし認証が必要）
 app.use(express.static('public'));
+
+// 保護されたAPIエンドポイント（認証必要）
+app.use('/api/projects', apiLimiter, authenticate, projectRoutes);
+app.use('/api/analytics', apiLimiter, authenticate, analyticsRoutes);
+app.use('/api/abtests', apiLimiter, authenticate, abtestRoutes);
+app.use('/api/accounts', apiLimiter, authenticate, accountRoutes);
 
 // エラーハンドリングミドルウェア
 app.use((err, req, res, next) => {
