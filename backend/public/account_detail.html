@@ -85,30 +85,32 @@
     const API_URL = '/api';
     const params = new URLSearchParams(location.search);
     const accountId = params.get('id');
-    
+
     let projects = [];
     let selectedProjectIds = [];
+    let isEditMode = false;
+    let originalPasswordHash = '';
 
-		// 認証付きfetchヘルパー関数
-		function authFetch(url, options = {}) {
-			const token = sessionStorage.getItem('token');
-			
-			if (!token) {
-				console.error('No token found, redirecting to login');
-				window.location.href = 'index.html';
-				return Promise.reject(new Error('No authentication token'));
-			}
-			
-			const headers = {
-				...options.headers,
-				'Authorization': `Bearer ${token}`
-			};
-			
-			return fetch(url, {
-				...options,
-				headers
-			});
-		}
+    // 認証付きfetchヘルパー関数
+    function authFetch(url, options = {}) {
+      const token = sessionStorage.getItem('token');
+      
+      if (!token) {
+        console.error('No token found, redirecting to login');
+        window.location.href = 'index.html';
+        return Promise.reject(new Error('No authentication token'));
+      }
+      
+      const headers = {
+        ...options.headers,
+        'Authorization': `Bearer ${token}`
+      };
+      
+      return fetch(url, {
+        ...options,
+        headers
+      });
+    }
 
     async function loadProjects() {
       try {
@@ -120,7 +122,6 @@
 					return;
 				}
         projects = await res.json();
-        // アカウント情報を読み込んでいない場合のみレンダリング
         if (!accountId) {
           renderProjectCheckboxes();
         }
@@ -158,27 +159,32 @@
     async function loadAccount() {
       if (!accountId) return;
 
+      isEditMode = true;
+
       try {
         const res = await authFetch(`${API_URL}/accounts/${accountId}`);
-				if (res.status === 401) {
-					alert('セッションが期限切れです。再度ログインしてください。');
-					sessionStorage.clear();
-					window.location.href = 'index.html';
-					return;
-				}
+        if (res.status === 401) {
+          alert('セッションが期限切れです。再度ログインしてください。');
+          sessionStorage.clear();
+          window.location.href = 'index.html';
+          return;
+        }
         const account = await res.json();
         
         document.getElementById('account-id').value = account.accountId;
-        document.getElementById('password').value = account.password;
         
-        // permissionIdsが配列であることを確認
+        // パスワードフィールドはプレースホルダーのみ表示
+        const passwordInput = document.getElementById('password');
+        passwordInput.value = '';
+        passwordInput.placeholder = '変更する場合のみ入力してください';
+        
+        // 元のパスワードハッシュを保存（比較用ではなく、変更判定用）
+        originalPasswordHash = account.password || '';
+        
         selectedProjectIds = Array.isArray(account.permissionIds) ? account.permissionIds : [];
         
-        // selectedProjectIdsを設定してからレンダリング
         renderProjectCheckboxes();
         
-        // 「全て」チェックボックスは renderProjectCheckboxes() の後に設定
-        // (updateAllProjectsCheckbox()で上書きされるのを防ぐため)
         const allProjectsCheckbox = document.getElementById('all-projects');
         allProjectsCheckbox.checked = account.allProjects;
         
@@ -188,7 +194,7 @@
 				if (err.message === 'No authentication token') {
 					return;
 				}
-				alert('アカウントの読み込みに失敗しました');
+				alert('accountsの読み込みに失敗しました');
 			}
     }
 
@@ -230,7 +236,7 @@
 
     document.getElementById('save-btn').addEventListener('click', async () => {
       const accountIdValue = document.getElementById('account-id').value.trim();
-      const password = document.getElementById('password').value.trim();
+      const passwordValue = document.getElementById('password').value.trim();
       const allProjects = document.getElementById('all-projects').checked;
       
       if (!accountIdValue) {
@@ -243,14 +249,17 @@
         return;
       }
       
-      if (!password) {
-        alert('パスワードを入力してください');
-        return;
-      }
-      
-      if (!password.match(/^[a-zA-Z0-9!-/:-@¥[-`{-~]+$/)) {
-        alert('パスワードは半角英数記号で入力してください');
-        return;
+      // 新規作成時またはパスワード変更時のみバリデーション
+      if (!isEditMode || passwordValue !== '') {
+        if (!passwordValue) {
+          alert('パスワードを入力してください');
+          return;
+        }
+        
+        if (!passwordValue.match(/^[a-zA-Z0-9!-/:-@¥[-`{-~]+$/)) {
+          alert('パスワードは半角英数記号で入力してください');
+          return;
+        }
       }
       
       const permissionIds = allProjects ? [] : Array.from(document.querySelectorAll('.project-checkbox:checked'))
@@ -258,10 +267,17 @@
       
       const data = {
         accountId: accountIdValue,
-        password: password,
         allProjects: allProjects,
         permissionIds: permissionIds
       };
+      
+      // パスワードが入力されている場合のみ含める
+      if (passwordValue !== '') {
+        data.password = passwordValue;
+      } else if (isEditMode) {
+        // 編集モードでパスワードが空の場合、ダミー値を送る（サーバー側で無視される）
+        data.password = originalPasswordHash;
+      }
       
       try {
         let res;

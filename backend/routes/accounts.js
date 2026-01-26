@@ -42,7 +42,7 @@ router.get('/:id', async (req, res) => {
     res.json({
       _id: account._id,
       accountId: account.accountId,
-      password: account.password,
+      password: '', // セキュリティのため、パスワードは空で返す
       allProjects: account.allProjects,
       permissionIds: account.permissions.map(p => p._id.toString())
     });
@@ -72,7 +72,7 @@ router.post('/', async (req, res) => {
     
     const account = new Account({
       accountId,
-      password,
+      password, // pre-saveフックでハッシュ化される
       allProjects: allProjects || false,
       permissions: allProjects ? [] : (permissionIds || [])
     });
@@ -94,10 +94,6 @@ router.put('/:id', async (req, res) => {
       return res.status(400).json({ error: 'IDは半角英数字で入力してください' });
     }
     
-    if (!password || !password.match(/^[a-zA-Z0-9!-/:-@¥[-`{-~]+$/)) {
-      return res.status(400).json({ error: 'パスワードは半角英数記号で入力してください' });
-    }
-    
     const existingAccount = await Account.findOne({ 
       accountId, 
       _id: { $ne: req.params.id } 
@@ -107,23 +103,41 @@ router.put('/:id', async (req, res) => {
       return res.status(400).json({ error: 'このIDは既に使用されています' });
     }
     
-    const account = await Account.findByIdAndUpdate(
-      req.params.id,
-      {
-        accountId,
-        password,
-        allProjects: allProjects || false,
-        permissions: allProjects ? [] : (permissionIds || []),
-        updatedAt: new Date()
-      },
-      { new: true, runValidators: true }
-    );
+    // アカウントを取得
+    const account = await Account.findById(req.params.id);
     
     if (!account) {
       return res.status(404).json({ error: 'Account not found' });
     }
     
-    res.json(account);
+    // フィールドを更新
+    account.accountId = accountId;
+    account.allProjects = allProjects || false;
+    account.permissions = allProjects ? [] : (permissionIds || []);
+    account.updatedAt = new Date();
+    
+    // パスワード処理
+    if (password && password.trim() !== '') {
+      // パスワードが既にハッシュ化されているかチェック（bcryptのハッシュは$2で始まる）
+      const isHashed = password.startsWith('$2b$') || password.startsWith('$2a$');
+      
+      if (!isHashed) {
+        // 平文パスワードの場合のみバリデーションと設定
+        if (!password.match(/^[a-zA-Z0-9!-/:-@¥[-`{-~]+$/)) {
+          return res.status(400).json({ error: 'パスワードは半角英数記号で入力してください' });
+        }
+        // 平文パスワードを設定（pre-saveフックでハッシュ化される）
+        account.password = password;
+      } else {
+        // 既にハッシュ化されている場合は変更しない
+        console.log('[Account Update] Password unchanged (already hashed)');
+      }
+    }
+    
+    // 保存（pre-saveフックが実行される）
+    const updated = await account.save();
+    
+    res.json(updated);
   } catch (err) {
     console.error('Update account error:', err);
     res.status(500).json({ error: err.message });

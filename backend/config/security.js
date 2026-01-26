@@ -10,6 +10,11 @@ const apiLimiter = rateLimit({
   message: 'リクエストが多すぎます。しばらく待ってから再試行してください。',
   standardHeaders: true,
   legacyHeaders: false,
+  // validate オプションを追加して trustProxy 警告を無効化
+  validate: {
+    trustProxy: false, // trust proxy の検証を無効化
+    xForwardedForHeader: false
+  }
 });
 
 const trackingLimiter = rateLimit({
@@ -21,6 +26,11 @@ const trackingLimiter = rateLimit({
   skip: (req) => {
     // 正当なプロジェクトからのリクエストはスキップ
     return req.validProject === true;
+  },
+  // validate オプションを追加
+  validate: {
+    trustProxy: false,
+    xForwardedForHeader: false
   }
 });
 
