@@ -19,12 +19,16 @@ services:
     networks:
       - tracker_network
       - default
+    restart: unless-stopped
+    
   mongodb:
     image: mongo:latest
     ports:
       - "27017:27017"
     volumes:
-      # - mongo-data:/data/db
+      # データを削除
+      #- mongo-data:/data/db
+      # ホストの./dataディレクトリにデータを永続化
       - ./data:/data/db
     environment:
       - TZ=Asia/Tokyo
@@ -33,9 +37,7 @@ services:
       - MONGO_INITDB_ROOT_PASSWORD=changeme
     networks:
       - default
-
-volumes:
-  mongo-data:
+    restart: unless-stopped
 
 networks:
   tracker_network:

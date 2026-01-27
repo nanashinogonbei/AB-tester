@@ -36,8 +36,13 @@ router.get('/:projectId.js', async (req, res) => {
       .replace('{{API_KEY}}', project.apiKey)
       .replace('{{SERVER_HOST}}', host);
 
-    res.setHeader('Content-Type', 'application/javascript');
+    // CORSヘッダーを追加
+    res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
     res.setHeader('Cache-Control', 'public, max-age=3600');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
     res.send(customizedSdk);
   } catch (err) {
     console.error('SDK Error:', err);
