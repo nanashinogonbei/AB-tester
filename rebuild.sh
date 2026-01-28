@@ -98,3 +98,5 @@ echo "  Container Status"
 echo "======================================"
 docker compose ps
 echo ""
+
+docker compose logs -f app

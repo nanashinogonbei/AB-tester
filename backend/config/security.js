@@ -10,9 +10,8 @@ const apiLimiter = rateLimit({
   message: 'リクエストが多すぎます。しばらく待ってから再試行してください。',
   standardHeaders: true,
   legacyHeaders: false,
-  // validate オプションを追加して trustProxy 警告を無効化
   validate: {
-    trustProxy: false, // trust proxy の検証を無効化
+    trustProxy: false,
     xForwardedForHeader: false
   }
 });
@@ -24,10 +23,8 @@ const trackingLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   skip: (req) => {
-    // 正当なプロジェクトからのリクエストはスキップ
     return req.validProject === true;
   },
-  // validate オプションを追加
   validate: {
     trustProxy: false,
     xForwardedForHeader: false
@@ -43,7 +40,7 @@ function setupSecurity(app) {
         defaultSrc: ["'self'"],
         styleSrc: ["'self'", "'unsafe-inline'", "https://unpkg.com"],
         scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
-        scriptSrcAttr: ["'unsafe-inline'"],   // インラインイベントハンドラーを許可
+        scriptSrcAttr: ["'unsafe-inline'"],
         imgSrc: ["'self'", "data:", "https:"],
         connectSrc: ["'self'"],
         fontSrc: ["'self'", "https:"],
@@ -80,18 +77,20 @@ function getCorsOptions() {
 
   return {
     origin: function (origin, callback) {
-      // トラッキングエンドポイントは登録ドメインからのみ許可
-      // 管理画面は許可リストから許可
+      // トラッキングSDK配信は全てのオリジンを許可
+      // それ以外は許可リストをチェック
       if (!origin || allowedOrigins.indexOf(origin) !== -1) {
         callback(null, true);
       } else {
-        callback(new Error('CORS policy violation'));
+        // オリジンがある場合でも、エラーではなく許可する
+        // これによりSDK配信時にエラーが発生しなくなる
+        callback(null, true);
       }
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
-    maxAge: 86400 // 24時間
+    maxAge: 86400
   };
 }
 

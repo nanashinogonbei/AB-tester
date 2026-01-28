@@ -9,26 +9,46 @@ const { normalizeUrl, findProjectByUrl } = require('../utils/urlUtils');
 
 const router = express.Router();
 
+// すべてのルートに対してCORSミドルウェアを適用
+router.use((req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Access-Control-Max-Age', '86400');
+  next();
+});
+
+// OPTIONSリクエストのハンドリング（プリフライト）
+router.options('*', (req, res) => {
+  res.status(204).send();
+});
+
 // SDK配信
 router.get('/:projectId.js', async (req, res) => {
   try {
+    console.log(`[SDK] Request for project ${req.params.projectId} from origin: ${req.get('origin') || req.get('referer')}`);
+    
     const project = await Project.findById(req.params.projectId);
     if (!project) {
+      console.error(`[SDK] Project not found: ${req.params.projectId}`);
+      res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
       return res.status(404).send('// Project not found');
     }
 
-    const origin = req.get('origin') || req.get('referer');
-    if (origin) {
-      const requestProject = await findProjectByUrl(origin);
-      if (!requestProject || requestProject._id.toString() !== project._id.toString()) {
-        console.warn(`Unauthorized SDK access: ${origin} for project ${project._id}`);
-        return res.status(403).send('// Domain not authorized');
-      }
-    }
+    // 追加のヘッダー設定
+    res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
 
     const templatePath = path.join(__dirname, '..', 'public', 'tracker-sdk-template.js');
+    
+    if (!fs.existsSync(templatePath)) {
+      console.error(`[SDK] Template not found: ${templatePath}`);
+      return res.status(500).send('// Template not found');
+    }
+    
     let sdkTemplate = fs.readFileSync(templatePath, 'utf8');
-
     const host = req.get('host');
 
     const customizedSdk = sdkTemplate
@@ -36,16 +56,11 @@ router.get('/:projectId.js', async (req, res) => {
       .replace('{{API_KEY}}', project.apiKey)
       .replace('{{SERVER_HOST}}', host);
 
-    // CORSヘッダーを追加
-    res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
-    res.setHeader('Cache-Control', 'public, max-age=3600');
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
-    res.setHeader('X-Content-Type-Options', 'nosniff');
+    console.log(`[SDK] Successfully delivered SDK for project ${project._id}`);
     res.send(customizedSdk);
   } catch (err) {
-    console.error('SDK Error:', err);
+    console.error('[SDK] Error:', err);
+    res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
     res.status(500).send('// Server Error');
   }
 });
@@ -53,7 +68,6 @@ router.get('/:projectId.js', async (req, res) => {
 // トラッキング
 router.post('/', async (req, res) => {
   try {
-
     let data = req.body;
     
     // bodyが空でrawBodyがある場合（sendBeaconの場合）

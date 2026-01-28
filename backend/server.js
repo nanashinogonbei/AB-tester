@@ -6,6 +6,7 @@ require('dotenv').config();
 
 const express = require('express');
 const cron = require('node-cron');
+const cors = require('cors');
 const connectDB = require('./config/database');
 const { setupSecurity, getCorsOptions, apiLimiter, trackingLimiter } = require('./config/security');
 const { authenticate, checkProjectPermission } = require('./middleware/auth');
@@ -25,10 +26,6 @@ app.set('trust proxy', true);
 // セキュリティミドルウェアのセットアップ
 setupSecurity(app);
 
-// CORS設定
-const cors = require('cors');
-app.use(cors(getCorsOptions()));
-
 // Body Parser
 app.use((req, res, next) => {
   const contentType = req.headers['content-type'] || '';
@@ -38,7 +35,7 @@ app.use((req, res, next) => {
   }
   
   express.json({ 
-    limit: '10mb', // ペイロードサイズ制限
+    limit: '10mb',
     type: ['application/json', 'text/plain', 'application/octet-stream'],
     verify: (req, res, buf, encoding) => {
       req.rawBody = buf.toString(encoding || 'utf8');
@@ -56,14 +53,198 @@ const abtestRoutes = require('./routes/abtests');
 const trackerRoutes = require('./routes/tracker');
 const accountRoutes = require('./routes/accounts');
 
-// 公開エンドポイント（認証不要）
-app.use('/api/auth', authRoutes);
-app.use('/tracker', trackingLimiter, trackerRoutes); // トラッキング用SDK配信
-app.use('/track', trackingLimiter, trackerRoutes);   // トラッキングデータ受信
+// トラッキング関連のエンドポイント - 完全にオープンなCORS設定
+app.use('/tracker', cors({
+  origin: '*',
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type'],
+  credentials: false
+}), trackerRoutes);
 
-app.get('/api/abtests/:abtestId/creative/:creativeIndex', async (req, res) => {
+app.use('/track', cors({
+  origin: '*',
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type'],
+  credentials: false
+}), trackingLimiter, trackerRoutes);
+
+// 公開エンドポイント（認証不要）
+app.use('/api/auth', cors(getCorsOptions()), authRoutes);
+
+// ABテスト実行エンドポイント（認証不要 - SDKから呼ばれる）
+app.post('/api/abtests/execute', cors({
+  origin: '*',
+  methods: ['POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type'],
+  credentials: false
+}), async (req, res) => {
+  const ABTest = require('./models/ABTest');
+  const useragent = require('useragent');
+  const { checkConditions, selectCreative } = require('./utils/conditionUtils');
+  const { matchUrl } = require('./utils/urlUtils');
+
   try {
-    const ABTest = require('./models/ABTest');
+    const { projectId, url, userAgent, language, visitCount, referrer } = req.body;
+
+    if (!projectId) {
+      return res.status(400).json({ error: 'projectId is required' });
+    }
+
+    const abtests = await ABTest.find({ projectId: projectId, active: true });
+
+    if (abtests.length === 0) {
+      return res.json({ matched: false });
+    }
+
+    const now = new Date();
+    const agent = useragent.parse(userAgent);
+
+    let deviceType = 'other';
+    const deviceFamily = agent.device.family;
+    if (deviceFamily === 'Other' || deviceFamily === 'Desktop') {
+      deviceType = 'PC';
+    } else if (deviceFamily.includes('iPad') || deviceFamily.includes('Tablet')) {
+      deviceType = 'Tablet';
+    } else if (deviceFamily.includes('iPhone') || deviceFamily.includes('Android') ||
+      deviceFamily.includes('Mobile')) {
+      deviceType = 'SP';
+    }
+
+    const userContext = {
+      url: url,
+      device: deviceType,
+      browser: agent.family,
+      os: agent.os.family,
+      language: language || 'unknown',
+      visitCount: parseInt(visitCount) || 0,
+      referrer: referrer || ''
+    };
+
+    for (const abtest of abtests) {
+      if (abtest.startDate && now < new Date(abtest.startDate)) {
+        continue;
+      }
+      if (abtest.endDate && now > new Date(abtest.endDate)) {
+        continue;
+      }
+
+      if (abtest.targetUrl && abtest.targetUrl.trim() !== '') {
+        if (!matchUrl(url, abtest.targetUrl)) {
+          continue;
+        }
+      }
+
+      if (abtest.excludeUrl && abtest.excludeUrl.trim() !== '') {
+        if (matchUrl(url, abtest.excludeUrl)) {
+          continue;
+        }
+      }
+
+      const conditionsMatch = checkConditions(abtest.conditions, userContext);
+      if (!conditionsMatch) {
+        continue;
+      }
+
+      const result = selectCreative(abtest.creatives);
+      if (result) {
+        return res.json({
+          matched: true,
+          abtestId: abtest._id,
+          abtestName: abtest.name,
+          sessionDuration: abtest.sessionDuration || 720,
+          creative: {
+            index: result.index,
+            name: result.creative.name,
+            css: result.creative.css,
+            javascript: result.creative.javascript,
+            isOriginal: result.creative.isOriginal
+          }
+        });
+      }
+    }
+
+    res.json({ matched: false });
+  } catch (err) {
+    console.error('[ABTest Execute] エラー:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ABテストインプレッションログ（認証不要 - SDKから呼ばれる）
+app.post('/api/abtests/log-impression', cors({
+  origin: '*',
+  methods: ['POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type'],
+  credentials: false
+}), trackingLimiter, async (req, res) => {
+  const Project = require('./models/Project');
+  const ABTestLog = require('./models/ABTestLog');
+  const useragent = require('useragent');
+  const { toJST } = require('./utils/dateUtils');
+
+  try {
+    const {
+      projectId, apiKey, abtestId, userId, creativeIndex,
+      creativeName, isOriginal, url, userAgent, language
+    } = req.body;
+
+    if (!projectId || !apiKey || !abtestId || !userId || creativeIndex === undefined) {
+      return res.status(400).json({ error: 'Missing required parameters' });
+    }
+
+    const project = await Project.findOne({ _id: projectId, apiKey: apiKey });
+    if (!project) {
+      return res.status(403).json({ error: 'Invalid credentials' });
+    }
+
+    const agent = useragent.parse(userAgent);
+    let deviceType = 'other';
+    const deviceFamily = agent.device.family;
+
+    if (deviceFamily === 'Other' || deviceFamily === 'Desktop') {
+      deviceType = 'PC';
+    } else if (deviceFamily.includes('iPad') || deviceFamily.includes('Tablet')) {
+      deviceType = 'Tablet';
+    } else if (deviceFamily.includes('iPhone') || deviceFamily.includes('Android') ||
+      deviceFamily.includes('Mobile')) {
+      deviceType = 'SP';
+    }
+
+    const jstNow = toJST(new Date());
+
+    const abtestLog = new ABTestLog({
+      projectId: project._id,
+      abtestId: abtestId,
+      userId: userId,
+      creativeIndex: creativeIndex,
+      creativeName: creativeName || '',
+      isOriginal: isOriginal || false,
+      url: url,
+      device: deviceType,
+      browser: agent.family,
+      os: agent.os.family,
+      language: language || 'unknown',
+      timestamp: jstNow
+    });
+
+    await abtestLog.save();
+    res.json({ status: 'ok' });
+  } catch (err) {
+    console.error('ABTest log impression error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 特定のクリエイティブ取得（認証不要 - SDKから呼ばれる）
+app.get('/api/abtests/:abtestId/creative/:creativeIndex', cors({
+  origin: '*',
+  methods: ['GET', 'OPTIONS'],
+  allowedHeaders: ['Content-Type'],
+  credentials: false
+}), async (req, res) => {
+  const ABTest = require('./models/ABTest');
+  
+  try {
     const abtest = await ABTest.findById(req.params.abtestId);
     
     if (!abtest) {
@@ -95,14 +276,14 @@ app.get('/api/abtests/:abtestId/creative/:creativeIndex', async (req, res) => {
   }
 });
 
-// 静的ファイルは最後に（ただし認証が必要）
+// 静的ファイル（認証不要）
 app.use(express.static('public'));
 
-// 保護されたAPIエンドポイント（認証必要）
-app.use('/api/projects', apiLimiter, authenticate, projectRoutes);
-app.use('/api/analytics', apiLimiter, authenticate, analyticsRoutes);
-app.use('/api/abtests', apiLimiter, authenticate, abtestRoutes);
-app.use('/api/accounts', apiLimiter, authenticate, accountRoutes);
+// 保護されたAPIエンドポイント（認証必要）- 制限的なCORS設定
+app.use('/api/projects', cors(getCorsOptions()), apiLimiter, authenticate, projectRoutes);
+app.use('/api/analytics', cors(getCorsOptions()), apiLimiter, authenticate, analyticsRoutes);
+app.use('/api/abtests', cors(getCorsOptions()), apiLimiter, authenticate, abtestRoutes);
+app.use('/api/accounts', cors(getCorsOptions()), apiLimiter, authenticate, accountRoutes);
 
 // エラーハンドリングミドルウェア
 app.use((err, req, res, next) => {

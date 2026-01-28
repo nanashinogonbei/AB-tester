@@ -80,7 +80,7 @@
 						<div class="flex-shrink-0">
 							<div class="text-sm font-medium mb-2">SDK</div>
 							<div class="bg-gray-50 p-3 rounded text-xs font-mono mb-2 max-w-md break-all">
-								&lt;script src="${window.location.origin}/tracker/${project._id}.js" charset="utf-8"&gt;&lt;/script&gt;
+								&lt;script src="${window.location.origin}/tracker/${project._id}.js" charset="utf-8" crossorigin="anonymous"&gt;&lt;/script&gt;
 							</div>
 							<button data-project-id="${project._id}" class="copy-btn w-full bg-blue-500 text-white px-4 py-2 rounded text-sm hover:bg-blue-600 mb-2">
 								<span>📋 コピーする</span>
@@ -103,7 +103,7 @@
 
 		function copyCode(projectId, buttonElement) {
 			const serverUrl = window.location.origin;
-			const code = `<script src="${serverUrl}/tracker/${projectId}.js" charset="utf-8"><\/script>`;
+			const code = `<script src="${serverUrl}/tracker/${projectId}.js" charset="utf-8" crossorigin="anonymous"><\/script>`;
 			navigator.clipboard.writeText(code);
 			
 			const span = buttonElement.querySelector('span');
