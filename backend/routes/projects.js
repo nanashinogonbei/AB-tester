@@ -4,6 +4,7 @@ const Project = require('../models/Project');
 const Log = require('../models/Log');
 const ABTestLog = require('../models/ABTestLog');
 const { normalizeUrl } = require('../utils/urlUtils');
+const { escapeHtml, isValidUrl, containsScript } = require('../utils/sanitize');
 
 const router = express.Router();
 
@@ -18,14 +19,33 @@ router.get('/', async (req, res) => {
   }
 });
 
-// プロジェクト作成
+// プロジェクト作成（XSS対策強化版）
 router.post('/', async (req, res) => {
   try {
+    const { name, url } = req.body;
+    
+    // バリデーション
+    if (!name || name.trim() === '') {
+      return res.status(400).json({ error: 'プロジェクト名は必須です' });
+    }
+    
+    // スクリプトインジェクション検出
+    if (containsScript(name)) {
+      return res.status(400).json({ 
+        error: 'プロジェクト名にスクリプトを含めることはできません' 
+      });
+    }
+    
+    // URL検証
+    if (!url || !isValidUrl(url)) {
+      return res.status(400).json({ error: '有効なURLを入力してください' });
+    }
+    
     const apiKey = crypto.randomBytes(32).toString('hex');
-    const normalizedUrl = normalizeUrl(req.body.url);
+    const normalizedUrl = normalizeUrl(url);
     
     const project = new Project({
-      name: req.body.name,
+      name: escapeHtml(name), // HTMLエスケープ
       url: normalizedUrl,
       apiKey: apiKey
     });

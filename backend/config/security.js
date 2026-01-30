@@ -2,6 +2,7 @@ const rateLimit = require('express-rate-limit');
 const helmet = require('helmet');
 const mongoSanitize = require('express-mongo-sanitize');
 const xss = require('xss-clean');
+const crypto = require('crypto');
 
 // レートリミッター設定
 const apiLimiter = rateLimit({
@@ -44,25 +45,59 @@ const uploadLimiter = rateLimit({
   }
 });
 
+// CSP Nonce生成ミドルウェア
+function generateNonce(req, res, next) {
+  res.locals.nonce = crypto.randomBytes(16).toString('base64');
+  next();
+}
+
 // セキュリティミドルウェア設定
 function setupSecurity(app) {
-  // Helmet - セキュリティヘッダー設定
+  // Nonce生成
+  app.use(generateNonce);
+  
+  // Helmet - セキュリティヘッダー設定（静的HTML対応版）
   app.use(helmet({
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        styleSrc: ["'self'", "'unsafe-inline'", "https://unpkg.com"],
-        scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
-        scriptSrcAttr: ["'unsafe-inline'"],
+        styleSrc: [
+          "'self'", 
+          "'unsafe-inline'",  // Tailwind CSSのため必要
+          "https://unpkg.com"
+        ],
+        scriptSrc: [
+          "'self'",
+          "'unsafe-inline'",  // 静的HTMLファイルのため必要
+          "'unsafe-eval'"     // ABテスト機能のため必要（段階的に削除予定）
+        ],
+        scriptSrcAttr: ["'self'", "'unsafe-inline'"],
         imgSrc: ["'self'", "data:", "https:"],
         connectSrc: ["'self'"],
         fontSrc: ["'self'", "https:"],
         objectSrc: ["'none'"],
         mediaSrc: ["'self'"],
         frameSrc: ["'none'"],
+        formAction: ["'self'"],
+        baseUri: ["'self'"],
+        upgradeInsecureRequests: process.env.NODE_ENV === 'production' ? [] : null
       },
+      reportOnly: false
     },
     crossOriginEmbedderPolicy: false,
+    crossOriginResourcePolicy: { policy: "cross-origin" },
+    // XSS Protection（古いブラウザ用）
+    xssFilter: true,
+    // クリックジャッキング対策
+    frameguard: { action: 'deny' },
+    // MIME Type Sniffing防止
+    noSniff: true,
+    // HSTS（HTTPSの場合）
+    hsts: process.env.NODE_ENV === 'production' ? {
+      maxAge: 31536000,
+      includeSubDomains: true,
+      preload: true
+    } : false
   }));
 
   // NoSQL Injection対策
@@ -73,7 +108,7 @@ function setupSecurity(app) {
     },
   }));
 
-  // XSS対策
+  // XSS対策（追加の防御層）
   app.use(xss());
 
   return {
@@ -135,5 +170,6 @@ module.exports = {
   validateInput,
   apiLimiter,
   trackingLimiter,
-  uploadLimiter
+  uploadLimiter,
+  generateNonce
 };

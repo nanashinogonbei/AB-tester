@@ -78,7 +78,7 @@
     }
   }
   
-  // セッションチェック
+  // セッションチェック（改善版）
   window.checkSession = async function() {
     try {
       const response = await fetch(`${API_URL}/auth/session`, {
@@ -89,6 +89,10 @@
         const data = await response.json();
         return data;
       } else {
+        // 401はログインしていないだけなので、エラーログを出さない
+        if (response.status !== 401) {
+          console.error('[Auth] Session check failed:', response.status);
+        }
         return null;
       }
     } catch (err) {

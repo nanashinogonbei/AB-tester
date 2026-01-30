@@ -1,6 +1,7 @@
 const express = require('express');
 const Account = require('../models/Account');
 const Project = require('../models/Project');
+const { isValidAccountId, containsScript } = require('../utils/sanitize');
 
 const router = express.Router();
 
@@ -52,19 +53,29 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// アカウント作成
+// アカウント作成（XSS対策強化版）
 router.post('/', async (req, res) => {
   try {
     const { accountId, password, allProjects, permissionIds } = req.body;
     
-    if (!accountId || !accountId.match(/^[a-zA-Z0-9]+$/)) {
+    // アカウントIDバリデーション
+    if (!accountId || !isValidAccountId(accountId)) {
       return res.status(400).json({ error: 'IDは半角英数字で入力してください' });
     }
     
+    // スクリプトインジェクション検出
+    if (containsScript(accountId)) {
+      return res.status(400).json({ 
+        error: 'IDにスクリプトを含めることはできません' 
+      });
+    }
+    
+    // パスワードバリデーション
     if (!password || !password.match(/^[a-zA-Z0-9!-/:-@¥[-`{-~]+$/)) {
       return res.status(400).json({ error: 'パスワードは半角英数記号で入力してください' });
     }
     
+    // 既存アカウントチェック
     const existingAccount = await Account.findOne({ accountId });
     if (existingAccount) {
       return res.status(400).json({ error: 'このIDは既に使用されています' });
@@ -85,15 +96,24 @@ router.post('/', async (req, res) => {
   }
 });
 
-// アカウント更新
+// アカウント更新（XSS対策強化版）
 router.put('/:id', async (req, res) => {
   try {
     const { accountId, password, allProjects, permissionIds } = req.body;
     
-    if (!accountId || !accountId.match(/^[a-zA-Z0-9]+$/)) {
+    // アカウントIDバリデーション
+    if (!accountId || !isValidAccountId(accountId)) {
       return res.status(400).json({ error: 'IDは半角英数字で入力してください' });
     }
     
+    // スクリプトインジェクション検出
+    if (containsScript(accountId)) {
+      return res.status(400).json({ 
+        error: 'IDにスクリプトを含めることはできません' 
+      });
+    }
+    
+    // 既存アカウントチェック（自分以外）
     const existingAccount = await Account.findOne({ 
       accountId, 
       _id: { $ne: req.params.id } 
@@ -118,11 +138,11 @@ router.put('/:id', async (req, res) => {
     
     // パスワード処理
     if (password && password.trim() !== '') {
-      // パスワードが既にハッシュ化されているかチェック（bcryptのハッシュは$2で始まる）
+      // パスワードが既にハッシュ化されているかチェック
       const isHashed = password.startsWith('$2b$') || password.startsWith('$2a$');
       
       if (!isHashed) {
-        // 平文パスワードの場合のみバリデーションと設定
+        // 平文パスワードの場合のみバリデーション
         if (!password.match(/^[a-zA-Z0-9!-/:-@¥[-`{-~]+$/)) {
           return res.status(400).json({ error: 'パスワードは半角英数記号で入力してください' });
         }

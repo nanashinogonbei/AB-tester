@@ -248,12 +248,13 @@
 				}
 			}
 
-			// JavaScriptの実行
+			// JavaScriptの実行（Function()を使用 - eval()より安全）
 			if (creative.javascript && creative.javascript.trim() !== '') {
-				// DOMContentLoadedを待ってから実行
 				const executeJS = () => {
 					try {
-						eval(creative.javascript);
+						// Function()コンストラクタを使用（eval()より安全）
+						const fn = new Function(creative.javascript);
+						fn();
 						console.log('[ABTest] ✓ JavaScriptを実行しました');
 						if (isDebugMode) {
 							console.log('[ABTest] JavaScript内容:', creative.javascript);
@@ -365,12 +366,13 @@
 					}
 				}
 
-				// JavaScriptの実行
+				// JavaScriptの実行（Function()を使用 - eval()より安全）
 				if (creative.javascript && creative.javascript.trim() !== '') {
-					// DOMContentLoadedを待ってから実行
 					const executeJS = () => {
 						try {
-							eval(creative.javascript);
+							// Function()コンストラクタを使用（eval()より安全）
+							const fn = new Function(creative.javascript);
+							fn();
 							if (isDebugMode) {
 								console.log('[ABTest] JavaScript内容:', creative.javascript);
 							}
